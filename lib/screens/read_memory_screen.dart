@@ -5,6 +5,7 @@ import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
 import '../services/gemini_service.dart';
+import 'voice_chat_screen.dart';
 
 class ReadMemoryScreen extends StatefulWidget {
   const ReadMemoryScreen({super.key});
@@ -778,6 +779,64 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                 ),
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            if (_memoryType != null && _memoryType!.toLowerCase() == 'historia')
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    // Navegar a pantalla de chat voz pasando el contenido
+                    final content = _memoryContent!;
+                    // Carga diferida para evitar dependencias circulares: import dinámico
+                    // ignore: use_build_context_synchronously
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => VoiceChatScreen(initialMemoryText: content),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(30),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 18,
+                      horizontal: 32,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF6B9D), Color(0xFFFEC163)],
+                      ),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFF6B9D).withOpacity(0.4),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.record_voice_over, color: Colors.white, size: 24),
+                        SizedBox(width: 12),
+                        Text(
+                          'Hablar con el Recuerdo',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

@@ -44,6 +44,16 @@ dependencies:
   
   # HTTP para llamadas a la API de Gemini
   http: ^1.2.0
+  # Reproducción de audio para TTS
+  just_audio: ^0.9.42
+  # Grabación de audio (PCM / m4a) para STT
+  record: ^6.1.2
+  # Permisos micrófono
+  permission_handler: ^11.3.1
+  # Acceso a directorios temporales
+  path_provider: ^2.1.4
+  # Estado para conversación
+  provider: ^6.0.5
 
 dev_dependencies:
   flutter_test:

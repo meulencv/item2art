@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 /// Nota: Para producción mover las claves a backend o a un servicio seguro.
 class ElevenLabsService {
   static const String _apiKey =
-      'REEMPLAZAR_CON_TU_XI_API_KEY'; // TODO mover a seguro
+      'sk_58667c8ad7d2e10a455eadd80250faad3102facf6905a465'; // TODO mover a seguro
   static const String _baseUrl = 'https://api.elevenlabs.io';
   static const String _defaultVoiceId =
       'JBFqnCBsd6RMkjVDRZzb'; // Ejemplo voice ID

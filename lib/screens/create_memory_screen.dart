@@ -9,6 +9,8 @@ class CreateMemoryScreen extends StatefulWidget {
   State<CreateMemoryScreen> createState() => _CreateMemoryScreenState();
 }
 
+enum MemoryType { historia, musica, imagen }
+
 class _CreateMemoryScreenState extends State<CreateMemoryScreen>
     with TickerProviderStateMixin {
   final TextEditingController _storyController = TextEditingController();
@@ -20,6 +22,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
   late Animation<double> _floatAnimation;
 
   bool _canContinue = false;
+  MemoryType? _selectedMemoryType;
 
   @override
   void initState() {
@@ -48,7 +51,9 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
 
     _storyController.addListener(() {
       setState(() {
-        _canContinue = _storyController.text.trim().length > 10;
+        _canContinue =
+            _storyController.text.trim().length > 10 &&
+            _selectedMemoryType != null;
       });
     });
   }
@@ -113,6 +118,8 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 32),
                         child: Column(
                           children: [
+                            const SizedBox(height: 40),
+                            _buildMemoryTypeSelector(),
                             const SizedBox(height: 40),
                             _buildIconHeader(),
                             const SizedBox(height: 40),
@@ -196,6 +203,120 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
           const Spacer(),
           const SizedBox(width: 48),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMemoryTypeSelector() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tipo de Recuerdo',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMemoryTypeCard(
+                  type: MemoryType.historia,
+                  icon: Icons.book,
+                  label: 'Historia',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildMemoryTypeCard(
+                  type: MemoryType.musica,
+                  icon: Icons.music_note,
+                  label: 'Música',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildMemoryTypeCard(
+                  type: MemoryType.imagen,
+                  icon: Icons.image,
+                  label: 'Imagen',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemoryTypeCard({
+    required MemoryType type,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _selectedMemoryType == type;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedMemoryType = type;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isSelected
+                ? [
+                    const Color(0xFFFF6B9D).withOpacity(0.8),
+                    const Color(0xFFFEC163).withOpacity(0.8),
+                  ]
+                : [
+                    Colors.white.withOpacity(0.1),
+                    Colors.white.withOpacity(0.05),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFFFF6B9D).withOpacity(0.8)
+                : Colors.white.withOpacity(0.3),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFFF6B9D).withOpacity(0.4),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : [],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

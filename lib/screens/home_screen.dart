@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'nfc_scan_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -248,9 +249,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               colors: [Color(0xFFFF6B9D), Color(0xFFFEC163)],
             ),
             onTap: () {
-              // TODO: Navigate to create memory screen
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Crear Recuerdo - Próximamente')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const NFCScanScreen()),
               );
             },
           ),

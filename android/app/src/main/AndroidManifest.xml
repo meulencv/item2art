@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permiso NFC requerido para usar nfc_manager -->
+    <uses-permission android:name="android.permission.NFC" />
+
+    <!-- Declaración de característica NFC (no obligatoria en todos dispositivos) -->
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <application
         android:label="item2art"
         android:name="${applicationName}"

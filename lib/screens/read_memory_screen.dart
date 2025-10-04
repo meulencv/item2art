@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
+import '../services/gemini_service.dart';
 
 class ReadMemoryScreen extends StatefulWidget {
   const ReadMemoryScreen({super.key});
@@ -25,6 +26,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   String? _memoryType;
   String? _memoryContent;
   String? _errorMessage;
+  bool _isGeneratingImage = false; // Para mostrar loading mientras genera imagen
+  String? _generatedImageBase64; // Imagen generada por OpenRouter
 
   @override
   void initState() {
@@ -128,14 +131,38 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
         if (jsonData is Map &&
             jsonData.containsKey('tipo') &&
             jsonData.containsKey('contenido')) {
+          
+          final tipo = jsonData['tipo'];
+          final contenido = jsonData['contenido'];
+          
           setState(() {
-            _showContent = true;
-            _memoryType = jsonData['tipo'];
-            _memoryContent = jsonData['contenido'];
+            _memoryType = tipo;
+            _memoryContent = contenido;
           });
 
-          _successController.forward();
           await NfcManager.instance.stopSession();
+          
+          // Si es tipo imagen, generar imagen con OpenRouter
+          if (tipo == 'imagen') {
+            setState(() {
+              _isGeneratingImage = true;
+            });
+            
+            final generatedImage = await GeminiService.generateImageFromMemory(contenido);
+            
+            setState(() {
+              _isGeneratingImage = false;
+              _generatedImageBase64 = generatedImage;
+              _showContent = true;
+            });
+          } else {
+            // Para historia y música, solo mostrar el contenido
+            setState(() {
+              _showContent = true;
+            });
+          }
+
+          _successController.forward();
         } else {
           setState(() {
             _errorMessage = 'Formato de datos incorrecto';
@@ -302,6 +329,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   Widget _buildBody() {
     if (_errorMessage != null) {
       return _buildErrorView();
+    } else if (_isGeneratingImage) {
+      return _buildGeneratingImageView();
     } else if (_showContent) {
       return _buildContentView();
     } else {
@@ -418,6 +447,96 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
     );
   }
 
+  Widget _buildGeneratingImageView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Animated loading indicator
+          SizedBox(
+            width: 120,
+            height: 120,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Spinning circle
+                AnimatedBuilder(
+                  animation: _waveController,
+                  builder: (context, child) {
+                    return Transform.rotate(
+                      angle: _waveController.value * 2 * 3.14159,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFFFF6B9D),
+                              const Color(0xFFFEC163),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                // Inner icon
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF0f0c29),
+                  ),
+                  child: const Icon(
+                    Icons.image,
+                    size: 50,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 40),
+
+          Text(
+            'Generando imagen...',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.white.withOpacity(0.95),
+              letterSpacing: 0.5,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: Text(
+              'La IA está creando una imagen basada en tu recuerdo',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withOpacity(0.6),
+                fontWeight: FontWeight.w300,
+                height: 1.5,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          const CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B9D)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildContentView() {
     if (_memoryType == null || _memoryContent == null) {
       return _buildErrorView();
@@ -517,6 +636,76 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Si es tipo imagen, mostrar la imagen generada por OpenRouter
+                  if (_memoryType == 'imagen' && _generatedImageBase64 != null && _generatedImageBase64!.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(
+                        base64Decode(_generatedImageBase64!),
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 200,
+                            color: Colors.white.withOpacity(0.1),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.broken_image,
+                                    size: 60,
+                                    color: Colors.white.withOpacity(0.3),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Error al cargar imagen',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.5),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ] else if (_memoryType == 'imagen') ...[
+                    // Si no se pudo generar imagen, mostrar mensaje
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.orange.withOpacity(0.5),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.orange.shade300,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'No se pudo generar la imagen',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                  
                   Text(
                     'Tu Recuerdo',
                     style: TextStyle(
@@ -662,6 +851,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                     _errorMessage = null;
                     _memoryType = null;
                     _memoryContent = null;
+                    _isGeneratingImage = false;
+                    _generatedImageBase64 = null;
                   });
                   _startNFCSession();
                 },

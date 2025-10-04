@@ -13,11 +13,13 @@ import '../services/memory_service.dart';
 class NFCScanScreen extends StatefulWidget {
   final String memoryStory;
   final String memoryType;
+  final String? imageBase64; // Opcional: solo para tipo imagen
 
   const NFCScanScreen({
     super.key,
     required this.memoryStory,
     required this.memoryType,
+    this.imageBase64,
   });
 
   @override
@@ -215,11 +217,19 @@ class _NFCScanScreenState extends State<NFCScanScreen>
 
       print('📊 Capacidad de la tarjeta: ${ndefAndroid.maxSize} bytes');
 
-      // Crear estructura JSON con tipo y contenido
-      final jsonData = jsonEncode({
+      // Crear estructura JSON con tipo, contenido y (opcionalmente) imagen
+      final Map<String, dynamic> jsonMap = {
         'tipo': widget.memoryType,
         'contenido': textToWrite,
-      });
+      };
+      
+      // Si es tipo imagen y hay datos base64, incluirlos
+      if (widget.imageBase64 != null && widget.imageBase64!.isNotEmpty) {
+        jsonMap['imagen'] = widget.imageBase64;
+        print('🎨 Incluyendo imagen en JSON (${widget.imageBase64!.length} chars)');
+      }
+      
+      final jsonData = jsonEncode(jsonMap);
 
       // Crear mensaje NDEF con registro de texto usando el paquete ndef
       final textRecord = ndef.TextRecord(
@@ -276,11 +286,19 @@ class _NFCScanScreenState extends State<NFCScanScreen>
 
       print('📊 Capacidad de la tarjeta: ${ndefIos.capacity} bytes');
 
-      // Crear estructura JSON con tipo y contenido
-      final jsonData = jsonEncode({
+      // Crear estructura JSON con tipo, contenido y (opcionalmente) imagen
+      final Map<String, dynamic> jsonMap = {
         'tipo': widget.memoryType,
         'contenido': textToWrite,
-      });
+      };
+      
+      // Si es tipo imagen y hay datos base64, incluirlos
+      if (widget.imageBase64 != null && widget.imageBase64!.isNotEmpty) {
+        jsonMap['imagen'] = widget.imageBase64;
+        print('🎨 Incluyendo imagen en JSON (${widget.imageBase64!.length} chars)');
+      }
+      
+      final jsonData = jsonEncode(jsonMap);
 
       // Crear mensaje NDEF con registro de texto usando el paquete ndef
       final textRecord = ndef.TextRecord(

@@ -9,7 +9,7 @@
     <application
         android:label="item2art"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/adaptive">
         <activity
             android:name=".MainActivity"
             android:exported="true"

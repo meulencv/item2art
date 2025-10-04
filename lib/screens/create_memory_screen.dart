@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'nfc_scan_screen.dart';
+import '../services/gemini_service.dart';
 
 class CreateMemoryScreen extends StatefulWidget {
   const CreateMemoryScreen({super.key});
@@ -23,6 +24,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
 
   bool _canContinue = false;
   MemoryType? _selectedMemoryType;
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -67,15 +69,53 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
     super.dispose();
   }
 
-  void _continueToNFC() {
-    if (_canContinue) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              NFCScanScreen(memoryStory: _storyController.text.trim()),
-        ),
-      );
+  Future<void> _continueToNFC() async {
+    if (_canContinue && !_isProcessing) {
+      setState(() {
+        _isProcessing = true;
+      });
+
+      try {
+        // Procesar el texto con Gemini AI
+        final memoryTypeStr = _selectedMemoryType.toString().split('.').last;
+        final processedText = await GeminiService.processMemoryText(
+          _storyController.text.trim(),
+          memoryTypeStr,
+        );
+
+        if (!mounted) return;
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => NFCScanScreen(
+              memoryStory: processedText,
+              memoryType: memoryTypeStr,
+            ),
+          ),
+        );
+      } catch (e) {
+        print('Error procesando con IA: $e');
+        // En caso de error, usar el texto original
+        if (!mounted) return;
+
+        final memoryTypeStr = _selectedMemoryType.toString().split('.').last;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => NFCScanScreen(
+              memoryStory: _storyController.text.trim(),
+              memoryType: memoryTypeStr,
+            ),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+          });
+        }
+      }
     }
   }
 
@@ -495,26 +535,42 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
                       ]
                     : [],
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.arrow_forward,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Continuar al Escaneo NFC',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
+              child: _isProcessing
+                  ? const SizedBox(
+                      height: 24,
+                      child: Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.arrow_forward,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Continuar al Escaneo NFC',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
         ),

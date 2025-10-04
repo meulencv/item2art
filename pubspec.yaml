@@ -41,6 +41,9 @@ dependencies:
   # NDEF Record para crear registros NFC
   ndef_record: ^1.2.1
   ndef: ^0.3.4
+  
+  # HTTP para llamadas a la API de Gemini
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

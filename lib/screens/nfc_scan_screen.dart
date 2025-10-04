@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
@@ -11,8 +12,13 @@ import '../services/memory_service.dart';
 
 class NFCScanScreen extends StatefulWidget {
   final String memoryStory;
+  final String memoryType;
 
-  const NFCScanScreen({super.key, required this.memoryStory});
+  const NFCScanScreen({
+    super.key,
+    required this.memoryStory,
+    required this.memoryType,
+  });
 
   @override
   State<NFCScanScreen> createState() => _NFCScanScreenState();
@@ -209,11 +215,17 @@ class _NFCScanScreenState extends State<NFCScanScreen>
 
       print('📊 Capacidad de la tarjeta: ${ndefAndroid.maxSize} bytes');
 
+      // Crear estructura JSON con tipo y contenido
+      final jsonData = jsonEncode({
+        'tipo': widget.memoryType,
+        'contenido': textToWrite,
+      });
+
       // Crear mensaje NDEF con registro de texto usando el paquete ndef
       final textRecord = ndef.TextRecord(
         encoding: ndef.TextEncoding.UTF8,
         language: 'es',
-        text: textToWrite,
+        text: jsonData,
       );
 
       // Codificar el record a bytes
@@ -235,7 +247,8 @@ class _NFCScanScreenState extends State<NFCScanScreen>
       // Escribir en la tarjeta NFC (SOBRESCRIBE contenido previo)
       await ndefAndroid.writeNdefMessage(ndefMessage);
 
-      print('✅ Texto escrito exitosamente en la tarjeta NFC (Android)');
+      print('✅ JSON escrito exitosamente en la tarjeta NFC (Android)');
+      print('📄 Tipo: ${widget.memoryType}');
       print(
         '📄 Contenido: ${textToWrite.substring(0, textToWrite.length > 50 ? 50 : textToWrite.length)}...',
       );
@@ -263,11 +276,17 @@ class _NFCScanScreenState extends State<NFCScanScreen>
 
       print('📊 Capacidad de la tarjeta: ${ndefIos.capacity} bytes');
 
+      // Crear estructura JSON con tipo y contenido
+      final jsonData = jsonEncode({
+        'tipo': widget.memoryType,
+        'contenido': textToWrite,
+      });
+
       // Crear mensaje NDEF con registro de texto usando el paquete ndef
       final textRecord = ndef.TextRecord(
         encoding: ndef.TextEncoding.UTF8,
         language: 'es',
-        text: textToWrite,
+        text: jsonData,
       );
 
       // Codificar el record a bytes
@@ -289,7 +308,8 @@ class _NFCScanScreenState extends State<NFCScanScreen>
       // Escribir en la tarjeta NFC (SOBRESCRIBE contenido previo)
       await ndefIos.writeNdef(ndefMessage);
 
-      print('✅ Texto escrito exitosamente en la tarjeta NFC (iOS)');
+      print('✅ JSON escrito exitosamente en la tarjeta NFC (iOS)');
+      print('📄 Tipo: ${widget.memoryType}');
       print(
         '📄 Contenido: ${textToWrite.substring(0, textToWrite.length > 50 ? 50 : textToWrite.length)}...',
       );

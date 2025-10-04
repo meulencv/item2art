@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'create_memory_screen.dart';
+import 'read_memory_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -269,10 +270,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
             ),
             onTap: () {
-              // TODO: Navigate to access memory screen
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Acceder a Recuerdo - Próximamente'),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ReadMemoryScreen(),
                 ),
               );
             },

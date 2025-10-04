@@ -19,12 +19,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    
+
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-    
+
     _scaleController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -34,25 +34,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat(reverse: true);
-    
+
     _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
       curve: Curves.easeIn,
     );
-    
+
     _scaleAnimation = CurvedAnimation(
       parent: _scaleController,
       curve: Curves.elasticOut,
     );
 
-    _floatAnimation = Tween<double>(
-      begin: -10,
-      end: 10,
-    ).animate(CurvedAnimation(
-      parent: _floatController,
-      curve: Curves.easeInOut,
-    ));
-    
+    _floatAnimation = Tween<double>(begin: -10, end: 10).animate(
+      CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
+    );
+
     _fadeController.forward();
     Future.delayed(const Duration(milliseconds: 300), () {
       _scaleController.forward();
@@ -70,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -89,8 +85,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: Stack(
           children: [
             // Animated background particles
-            ...List.generate(20, (index) => _buildFloatingParticle(index, size)),
-            
+            ...List.generate(
+              20,
+              (index) => _buildFloatingParticle(index, size),
+            ),
+
             // Main content
             SafeArea(
               child: FadeTransition(
@@ -98,23 +97,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Column(
                   children: [
                     const SizedBox(height: 60),
-                    
+
                     // Logo and title section
                     _buildHeader(),
-                    
+
                     const Spacer(),
-                    
+
                     // Main action buttons
                     ScaleTransition(
                       scale: _scaleAnimation,
                       child: _buildActionButtons(context),
                     ),
-                    
+
                     const SizedBox(height: 40),
-                    
+
                     // Tagline
                     _buildTagline(),
-                    
+
                     const SizedBox(height: 60),
                   ],
                 ),
@@ -131,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final left = random.nextDouble() * size.width;
     final top = random.nextDouble() * size.height;
     final size1 = random.nextDouble() * 4 + 2;
-    
+
     return Positioned(
       left: left,
       top: top,
@@ -181,10 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      const Color(0xFFFF6B9D),
-                      const Color(0xFFC06C84),
-                    ],
+                    colors: [const Color(0xFFFF6B9D), const Color(0xFFC06C84)],
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -203,16 +199,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             );
           },
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         // App name
         ShaderMask(
           shaderCallback: (bounds) => const LinearGradient(
-            colors: [
-              Color(0xFFFFFFFF),
-              Color(0xFFE0E0E0),
-            ],
+            colors: [Color(0xFFFFFFFF), Color(0xFFE0E0E0)],
           ).createShader(bounds),
           child: const Text(
             'item2art',
@@ -224,9 +217,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Subtitle
         Text(
           'Transforma objetos en arte',
@@ -252,10 +245,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             label: 'Crear Recuerdo',
             icon: Icons.add_circle_outline,
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFFFF6B9D),
-                Color(0xFFFEC163),
-              ],
+              colors: [Color(0xFFFF6B9D), Color(0xFFFEC163)],
             ),
             onTap: () {
               // TODO: Navigate to create memory screen
@@ -264,24 +254,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               );
             },
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Access Memory Button
           _buildMainButton(
             context: context,
             label: 'Acceder a Recuerdo',
             icon: Icons.nfc,
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFF667EEA),
-                Color(0xFF764BA2),
-              ],
+              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
             ),
             onTap: () {
               // TODO: Navigate to access memory screen
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Acceder a Recuerdo - Próximamente')),
+                const SnackBar(
+                  content: Text('Acceder a Recuerdo - Próximamente'),
+                ),
               );
             },
           ),
@@ -319,11 +308,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                color: Colors.white,
-                size: 28,
-              ),
+              Icon(icon, color: Colors.white, size: 28),
               const SizedBox(width: 16),
               Text(
                 label,

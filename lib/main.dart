@@ -4,7 +4,7 @@ import 'screens/home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -12,7 +12,7 @@ void main() {
       statusBarIconBrightness: Brightness.light,
     ),
   );
-  
+
   runApp(const Item2ArtApp());
 }
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:convert';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
@@ -9,6 +8,7 @@ import 'package:ndef/ndef.dart' as ndef;
 import 'package:ndef_record/ndef_record.dart';
 import '../models/memory.dart';
 import '../services/memory_service.dart';
+import '../services/supabase_service.dart';
 
 class NFCScanScreen extends StatefulWidget {
   final String memoryStory;
@@ -39,6 +39,7 @@ class _NFCScanScreenState extends State<NFCScanScreen>
   bool _isScanning = true;
   bool _showSuccess = false;
   String? _savedMemoryId;
+  String? _lastWriteError;
 
   @override
   void initState() {
@@ -103,28 +104,53 @@ class _NFCScanScreenState extends State<NFCScanScreen>
     NfcManager.instance.startSession(
       pollingOptions: {NfcPollingOption.iso14443, NfcPollingOption.iso15693},
       onDiscovered: (NfcTag tag) async {
-        // Obtener ID del tag
+        // Obtener ID del tag (UUID único de fábrica)
         final String nfcTagId = _extractTagId(tag);
 
-        // Intentar escribir en la tarjeta NFC
-        bool writeSuccess = await _writeToNFC(tag, widget.memoryStory);
+        // Guardar contenido en Supabase primero
+        final supabaseSaved = await SupabaseService.saveMemory(
+          nfcUuid: nfcTagId,
+          tipo: widget.memoryType,
+          contenido: widget.memoryStory,
+        );
 
-        if (!writeSuccess) {
-          // Si falla la escritura, informar al usuario
+        if (!supabaseSaved) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text(
-                  'No se pudo escribir en la tarjeta NFC. Puede ser de solo lectura.',
+                  'Error al guardar en la nube. Verifica tu conexión.',
                 ),
-                backgroundColor: Colors.orange.shade700,
+                backgroundColor: Colors.red.shade700,
                 duration: const Duration(seconds: 3),
               ),
             );
           }
+          await NfcManager.instance.stopSession();
+          return;
         }
 
-        // Procesar el tag detectado (guardar en la app)
+        // Escribir solo el UUID en la tarjeta NFC (ligero)
+        bool writeSuccess = await _writeUuidToNFC(tag, nfcTagId);
+
+        if (!writeSuccess) {
+          final message =
+              _lastWriteError ??
+              'No se pudo escribir en la tarjeta NFC. Puede ser de solo lectura.';
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: Colors.orange.shade700,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+          await NfcManager.instance.stopSession();
+          return;
+        }
+
+        // Procesar el tag detectado (guardar en la app localmente)
         await _onNFCDetected(nfcTagId);
 
         // Detener la sesión NFC después de procesar
@@ -179,34 +205,35 @@ class _NFCScanScreenState extends State<NFCScanScreen>
     return 'NFC_${DateTime.now().millisecondsSinceEpoch}';
   }
 
-  /// Escribe datos NDEF en la tarjeta NFC física
-  /// Sobrescribe cualquier contenido previo con el texto de la historia
-  Future<bool> _writeToNFC(NfcTag tag, String textToWrite) async {
+  /// Escribe solo el UUID en la tarjeta NFC física (formato texto simple)
+  /// Mucho más ligero que el JSON completo
+  Future<bool> _writeUuidToNFC(NfcTag tag, String uuid) async {
     try {
       // Intentar Android primero
       final ndefAndroid = NdefAndroid.from(tag);
       if (ndefAndroid != null) {
-        return await _writeToNFCAndroid(ndefAndroid, textToWrite);
+        return await _writeUuidToNFCAndroid(ndefAndroid, uuid);
       }
 
       // Intentar iOS
       final ndefIos = NdefIos.from(tag);
       if (ndefIos != null) {
-        return await _writeToNFCIos(ndefIos, textToWrite);
+        return await _writeUuidToNFCIos(ndefIos, uuid);
       }
 
       print('❌ Esta tarjeta NFC no soporta NDEF');
       return false;
     } catch (e) {
-      print('❌ Error al escribir en NFC: $e');
+      print('❌ Error al escribir UUID en NFC: $e');
       return false;
     }
   }
 
   /// Escribe en una tarjeta NFC Android
-  Future<bool> _writeToNFCAndroid(
+  /// Escribe UUID en una tarjeta NFC Android (solo texto simple, sin JSON)
+  Future<bool> _writeUuidToNFCAndroid(
     NdefAndroid ndefAndroid,
-    String textToWrite,
+    String uuid,
   ) async {
     try {
       // Verificar si la tarjeta es escribible
@@ -217,29 +244,29 @@ class _NFCScanScreenState extends State<NFCScanScreen>
 
       print('📊 Capacidad de la tarjeta: ${ndefAndroid.maxSize} bytes');
 
-      // Crear estructura JSON con tipo, contenido y (opcionalmente) imagen
-      final Map<String, dynamic> jsonMap = {
-        'tipo': widget.memoryType,
-        'contenido': textToWrite,
-      };
-      
-      // Si es tipo imagen y hay datos base64, incluirlos
-      if (widget.imageBase64 != null && widget.imageBase64!.isNotEmpty) {
-        jsonMap['imagen'] = widget.imageBase64;
-        print('🎨 Incluyendo imagen en JSON (${widget.imageBase64!.length} chars)');
-      }
-      
-      final jsonData = jsonEncode(jsonMap);
-
       // Crear mensaje NDEF con registro de texto usando el paquete ndef
+      // Solo escribimos el UUID simple (mucho más ligero que JSON)
       final textRecord = ndef.TextRecord(
         encoding: ndef.TextEncoding.UTF8,
         language: 'es',
-        text: jsonData,
+        text: uuid,
       );
 
       // Codificar el record a bytes
       final payload = textRecord.payload;
+
+      final estimatedSize = _estimateTextRecordSize(textRecord);
+      print(
+        '📦 Tamaño estimado del UUID: $estimatedSize bytes (~50 bytes típico)',
+      );
+
+      final int capacity = ndefAndroid.maxSize;
+      if (capacity > 0 && estimatedSize > capacity) {
+        _lastWriteError =
+            'El UUID supera la capacidad de esta tarjeta (${estimatedSize} > $capacity bytes).';
+        print('❌ Mensaje demasiado grande para la tarjeta (${capacity} bytes)');
+        return false;
+      }
 
       // Crear NdefRecord usando ndef_record
       final ndefRecord = NdefRecord(
@@ -257,21 +284,21 @@ class _NFCScanScreenState extends State<NFCScanScreen>
       // Escribir en la tarjeta NFC (SOBRESCRIBE contenido previo)
       await ndefAndroid.writeNdefMessage(ndefMessage);
 
-      print('✅ JSON escrito exitosamente en la tarjeta NFC (Android)');
-      print('📄 Tipo: ${widget.memoryType}');
-      print(
-        '📄 Contenido: ${textToWrite.substring(0, textToWrite.length > 50 ? 50 : textToWrite.length)}...',
-      );
+      print('✅ UUID escrito exitosamente en la tarjeta NFC (Android)');
+      print('� UUID: $uuid');
+
+      _lastWriteError = null;
 
       return true;
     } catch (e) {
-      print('❌ Error al escribir en NFC Android: $e');
+      print('❌ Error al escribir UUID en NFC Android: $e');
+      _lastWriteError ??= 'Error inesperado al escribir en la tarjeta: $e';
       return false;
     }
   }
 
-  /// Escribe en una tarjeta NFC iOS
-  Future<bool> _writeToNFCIos(NdefIos ndefIos, String textToWrite) async {
+  /// Escribe UUID en una tarjeta NFC iOS (solo texto simple, sin JSON)
+  Future<bool> _writeUuidToNFCIos(NdefIos ndefIos, String uuid) async {
     try {
       // Verificar estado
       if (ndefIos.status == NdefStatusIos.notSupported) {
@@ -286,29 +313,29 @@ class _NFCScanScreenState extends State<NFCScanScreen>
 
       print('📊 Capacidad de la tarjeta: ${ndefIos.capacity} bytes');
 
-      // Crear estructura JSON con tipo, contenido y (opcionalmente) imagen
-      final Map<String, dynamic> jsonMap = {
-        'tipo': widget.memoryType,
-        'contenido': textToWrite,
-      };
-      
-      // Si es tipo imagen y hay datos base64, incluirlos
-      if (widget.imageBase64 != null && widget.imageBase64!.isNotEmpty) {
-        jsonMap['imagen'] = widget.imageBase64;
-        print('🎨 Incluyendo imagen en JSON (${widget.imageBase64!.length} chars)');
-      }
-      
-      final jsonData = jsonEncode(jsonMap);
-
       // Crear mensaje NDEF con registro de texto usando el paquete ndef
+      // Solo escribimos el UUID simple (mucho más ligero que JSON)
       final textRecord = ndef.TextRecord(
         encoding: ndef.TextEncoding.UTF8,
         language: 'es',
-        text: jsonData,
+        text: uuid,
       );
 
       // Codificar el record a bytes
       final payload = textRecord.payload;
+
+      final estimatedSize = _estimateTextRecordSize(textRecord);
+      print(
+        '📦 Tamaño estimado del UUID: $estimatedSize bytes (~50 bytes típico)',
+      );
+
+      final int capacity = ndefIos.capacity;
+      if (capacity > 0 && estimatedSize > capacity) {
+        _lastWriteError =
+            'El UUID supera la capacidad de esta tarjeta (${estimatedSize} > $capacity bytes).';
+        print('❌ Mensaje demasiado grande para la tarjeta (${capacity} bytes)');
+        return false;
+      }
 
       // Crear NdefRecord usando ndef_record
       final ndefRecord = NdefRecord(
@@ -326,17 +353,34 @@ class _NFCScanScreenState extends State<NFCScanScreen>
       // Escribir en la tarjeta NFC (SOBRESCRIBE contenido previo)
       await ndefIos.writeNdef(ndefMessage);
 
-      print('✅ JSON escrito exitosamente en la tarjeta NFC (iOS)');
-      print('📄 Tipo: ${widget.memoryType}');
-      print(
-        '📄 Contenido: ${textToWrite.substring(0, textToWrite.length > 50 ? 50 : textToWrite.length)}...',
-      );
+      print('✅ UUID escrito exitosamente en la tarjeta NFC (iOS)');
+      print('� UUID: $uuid');
+
+      _lastWriteError = null;
 
       return true;
     } catch (e) {
-      print('❌ Error al escribir en NFC iOS: $e');
+      print('❌ Error al escribir UUID en NFC iOS: $e');
+      _lastWriteError ??= 'Error inesperado al escribir en la tarjeta: $e';
       return false;
     }
+  }
+
+  int _estimateTextRecordSize(ndef.TextRecord record) {
+    final payloadLength = record.payload.length;
+    final typeLength = record.type?.length ?? 0;
+    final idLength = record.id?.length ?? 0;
+
+    const flagsLength = 1; // byte de cabecera (TNF + flags)
+    const typeLengthField = 1;
+    const payloadLengthField = 4; // usamos 4 bytes para ser conservadores
+    final idLengthField = idLength > 0 ? 1 : 0;
+
+    final header =
+        flagsLength + typeLengthField + payloadLengthField + idLengthField;
+
+    final size = header + typeLength + idLength + payloadLength;
+    return size;
   }
 
   /// Procesa la detección de un tag NFC

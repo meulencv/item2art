@@ -5,6 +5,7 @@ import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
 import '../services/gemini_service.dart';
+import '../services/supabase_service.dart';
 import 'voice_chat_screen.dart';
 
 class ReadMemoryScreen extends StatefulWidget {
@@ -27,7 +28,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   String? _memoryType;
   String? _memoryContent;
   String? _errorMessage;
-  bool _isGeneratingImage = false; // Para mostrar loading mientras genera imagen
+  bool _isGeneratingImage =
+      false; // Para mostrar loading mientras genera imagen
   String? _generatedImageBase64; // Imagen generada por OpenRouter
 
   @override
@@ -100,81 +102,83 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
     try {
       print('📱 Tarjeta NFC detectada');
 
-      String? text;
+      String? uuid;
 
-      // Intentar leer NDEF desde Android
+      // Intentar leer UUID desde Android
       final ndefAndroid = NdefAndroid.from(tag);
       if (ndefAndroid != null) {
-        text = await _readFromNdefAndroid(ndefAndroid);
+        uuid = await _readUuidFromNdefAndroid(ndefAndroid);
       }
 
       // Si no funcionó con Android, intentar con iOS
-      if (text == null) {
+      if (uuid == null) {
         final ndefIos = NdefIos.from(tag);
         if (ndefIos != null) {
-          text = await _readFromNdefIos(ndefIos);
+          uuid = await _readUuidFromNdefIos(ndefIos);
         }
       }
 
-      if (text == null) {
+      if (uuid == null) {
         setState(() {
-          _errorMessage = 'Esta tarjeta no contiene datos NDEF';
+          _errorMessage = 'Esta tarjeta no contiene un UUID válido';
         });
         return;
       }
 
-      print('📄 Texto leído: $text');
+      print('� UUID leído: $uuid');
 
-      // Intentar parsear como JSON
-      try {
-        final jsonData = jsonDecode(text);
+      // Obtener datos desde Supabase usando el UUID
+      final memoryData = await SupabaseService.getMemoryByUuid(uuid);
 
-        if (jsonData is Map &&
-            jsonData.containsKey('tipo') &&
-            jsonData.containsKey('contenido')) {
-          
-          final tipo = jsonData['tipo'];
-          final contenido = jsonData['contenido'];
-          
-          setState(() {
-            _memoryType = tipo;
-            _memoryContent = contenido;
-          });
-
-          await NfcManager.instance.stopSession();
-          
-          // Si es tipo imagen, generar imagen con OpenRouter
-          if (tipo == 'imagen') {
-            setState(() {
-              _isGeneratingImage = true;
-            });
-            
-            final generatedImage = await GeminiService.generateImageFromMemory(contenido);
-            
-            setState(() {
-              _isGeneratingImage = false;
-              _generatedImageBase64 = generatedImage;
-              _showContent = true;
-            });
-          } else {
-            // Para historia y música, solo mostrar el contenido
-            setState(() {
-              _showContent = true;
-            });
-          }
-
-          _successController.forward();
-        } else {
-          setState(() {
-            _errorMessage = 'Formato de datos incorrecto';
-          });
-        }
-      } catch (e) {
-        print('Error parseando JSON: $e');
+      if (memoryData == null) {
         setState(() {
-          _errorMessage = 'Esta tarjeta no contiene un recuerdo válido';
+          _errorMessage =
+              'No se encontró información para este UUID en la base de datos';
+        });
+        return;
+      }
+
+      // Extraer tipo y contenido
+      final tipo = memoryData['tipo'] as String?;
+      final contenido = memoryData['contenido'] as String?;
+
+      if (tipo == null || contenido == null) {
+        setState(() {
+          _errorMessage = 'Formato de datos incorrecto en la base de datos';
+        });
+        return;
+      }
+
+      setState(() {
+        _memoryType = tipo;
+        _memoryContent = contenido;
+      });
+
+      await NfcManager.instance.stopSession();
+
+      // Si es tipo imagen, generar imagen con Gemini (siempre se regenera dinámicamente)
+      if (tipo == 'imagen') {
+        setState(() {
+          _isGeneratingImage = true;
+        });
+
+        final generatedImage = await GeminiService.generateImageFromMemory(
+          contenido,
+        );
+
+        setState(() {
+          _isGeneratingImage = false;
+          _generatedImageBase64 = generatedImage;
+          _showContent = true;
+        });
+      } else {
+        // Para historia y música, solo mostrar el contenido
+        setState(() {
+          _showContent = true;
         });
       }
+
+      _successController.forward();
     } catch (e) {
       print('Error leyendo NFC: $e');
       setState(() {
@@ -183,7 +187,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
     }
   }
 
-  Future<String?> _readFromNdefAndroid(NdefAndroid ndefAndroid) async {
+  Future<String?> _readUuidFromNdefAndroid(NdefAndroid ndefAndroid) async {
     try {
       // Primero intentar con el mensaje cacheado
       if (ndefAndroid.cachedNdefMessage != null &&
@@ -201,12 +205,12 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
       return null;
     } catch (e) {
-      print('Error leyendo Android NDEF: $e');
+      print('Error leyendo UUID Android NDEF: $e');
       return null;
     }
   }
 
-  Future<String?> _readFromNdefIos(NdefIos ndefIos) async {
+  Future<String?> _readUuidFromNdefIos(NdefIos ndefIos) async {
     try {
       // Primero intentar con el mensaje cacheado
       if (ndefIos.cachedNdefMessage != null &&
@@ -490,11 +494,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                     shape: BoxShape.circle,
                     color: Color(0xFF0f0c29),
                   ),
-                  child: const Icon(
-                    Icons.image,
-                    size: 50,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.image, size: 50, color: Colors.white),
                 ),
               ],
             ),
@@ -638,7 +638,9 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Si es tipo imagen, mostrar la imagen generada por OpenRouter
-                  if (_memoryType == 'imagen' && _generatedImageBase64 != null && _generatedImageBase64!.isNotEmpty) ...[
+                  if (_memoryType == 'imagen' &&
+                      _generatedImageBase64 != null &&
+                      _generatedImageBase64!.isNotEmpty) ...[
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Image.memory(
@@ -706,7 +708,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                     ),
                     const SizedBox(height: 20),
                   ],
-                  
+
                   Text(
                     'Tu Recuerdo',
                     style: TextStyle(
@@ -794,7 +796,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => VoiceChatScreen(initialMemoryText: content),
+                        builder: (context) =>
+                            VoiceChatScreen(initialMemoryText: content),
                       ),
                     );
                   },
@@ -821,7 +824,11 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.record_voice_over, color: Colors.white, size: 24),
+                        Icon(
+                          Icons.record_voice_over,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                         SizedBox(width: 12),
                         Text(
                           'Hablar con el Recuerdo',

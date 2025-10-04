@@ -9,7 +9,8 @@ class VoiceChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => VoiceChatProvider()..addSystemIntro(_buildIntro(initialMemoryText)),
+      create: (_) =>
+          VoiceChatProvider()..addSystemIntro(_buildIntro(initialMemoryText)),
       child: const _VoiceChatView(),
     );
   }
@@ -67,15 +68,23 @@ class _VoiceChatViewState extends State<_VoiceChatView> {
                 final isAI = msg.role == VoiceChatMessageRole.ai;
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 8),
-                  alignment: isAI ? Alignment.centerLeft : Alignment.centerRight,
+                  alignment: isAI
+                      ? Alignment.centerLeft
+                      : Alignment.centerRight,
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 300),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: isAI
-                            ? [const Color(0xFF667EEA).withOpacity(0.4), const Color(0xFF764BA2).withOpacity(0.4)]
-                            : [const Color(0xFFFF6B9D), const Color(0xFFFEC163)],
+                            ? [
+                                const Color(0xFF667EEA).withOpacity(0.4),
+                                const Color(0xFF764BA2).withOpacity(0.4),
+                              ]
+                            : [
+                                const Color(0xFFFF6B9D),
+                                const Color(0xFFFEC163),
+                              ],
                       ),
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(18),
@@ -131,7 +140,10 @@ class _VoiceChatViewState extends State<_VoiceChatView> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                           SizedBox(width: 12),
-                          Text('Procesando...', style: TextStyle(color: Colors.white70)),
+                          Text(
+                            'Procesando...',
+                            style: TextStyle(color: Colors.white70),
+                          ),
                         ],
                       )
                     : Text(
@@ -141,7 +153,9 @@ class _VoiceChatViewState extends State<_VoiceChatView> {
                         key: ValueKey(provider.isRecording ? 'rec' : 'idle'),
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: provider.isRecording ? Colors.redAccent : Colors.white70,
+                          color: provider.isRecording
+                              ? Colors.redAccent
+                              : Colors.white70,
                         ),
                       ),
               ),
@@ -163,7 +177,11 @@ class _VoiceChatViewState extends State<_VoiceChatView> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: (provider.isRecording ? Colors.redAccent : const Color(0xFF667EEA)).withOpacity(0.6),
+                      color:
+                          (provider.isRecording
+                                  ? Colors.redAccent
+                                  : const Color(0xFF667EEA))
+                              .withOpacity(0.6),
                       blurRadius: 20,
                       spreadRadius: 5,
                     ),

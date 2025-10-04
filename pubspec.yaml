@@ -54,6 +54,8 @@ dependencies:
   path_provider: ^2.1.4
   # Estado para conversación
   provider: ^6.0.5
+  # Supabase para backend
+  supabase_flutter: ^2.9.1
 
 dev_dependencies:
   flutter_test:

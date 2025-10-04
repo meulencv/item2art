@@ -11,7 +11,8 @@ class VoiceChatMessage {
   final VoiceChatMessageRole role;
   final String text;
   final DateTime timestamp;
-  VoiceChatMessage({required this.role, required this.text}) : timestamp = DateTime.now();
+  VoiceChatMessage({required this.role, required this.text})
+    : timestamp = DateTime.now();
 }
 
 class VoiceChatProvider extends ChangeNotifier {
@@ -34,7 +35,9 @@ class VoiceChatProvider extends ChangeNotifier {
 
   void addSystemIntro(String introText) {
     if (_messages.isEmpty) {
-      _messages.add(VoiceChatMessage(role: VoiceChatMessageRole.ai, text: introText));
+      _messages.add(
+        VoiceChatMessage(role: VoiceChatMessageRole.ai, text: introText),
+      );
       notifyListeners();
       _autoplayLastAI();
     }
@@ -49,14 +52,15 @@ class VoiceChatProvider extends ChangeNotifier {
 
   Future<void> startRecording() async {
     if (_isRecording) return;
-  final hasPermission = await _recorder.hasPermission();
+    final hasPermission = await _recorder.hasPermission();
     if (!hasPermission) {
       return; // TODO: manejar UI permiso
     }
     _isRecording = true;
     notifyListeners();
     final tempDir = Directory.systemTemp;
-    final filePath = '${tempDir.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final filePath =
+        '${tempDir.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a';
     await _recorder.start(
       const RecordConfig(
         encoder: AudioEncoder.aacLc,
@@ -73,7 +77,7 @@ class VoiceChatProvider extends ChangeNotifier {
     _isProcessing = true;
     notifyListeners();
 
-  final path = await _recorder.stop();
+    final path = await _recorder.stop();
     if (path == null) {
       _isProcessing = false;
       notifyListeners();
@@ -82,15 +86,25 @@ class VoiceChatProvider extends ChangeNotifier {
 
     try {
       final file = File(path);
-      final userText = await ElevenLabsService.speechToText(file) ?? '[No se pudo transcribir]';
-      _messages.add(VoiceChatMessage(role: VoiceChatMessageRole.user, text: userText));
+      final userText =
+          await ElevenLabsService.speechToText(file) ??
+          '[No se pudo transcribir]';
+      _messages.add(
+        VoiceChatMessage(role: VoiceChatMessageRole.user, text: userText),
+      );
       notifyListeners();
 
       // Obtener respuesta de Gemini usando historial limitado
       final contextText = _buildContext();
-      final prompt = 'Contexto del recuerdo:\n$contextText\n\nPregunta/usuario: $userText\n\nResponde de forma breve y empática.';
-      final aiResponse = await GeminiService.processMemoryText(prompt, 'historia');
-      _messages.add(VoiceChatMessage(role: VoiceChatMessageRole.ai, text: aiResponse));
+      final prompt =
+          'Contexto del recuerdo:\n$contextText\n\nPregunta/usuario: $userText\n\nResponde de forma breve y empática.';
+      final aiResponse = await GeminiService.processMemoryText(
+        prompt,
+        'historia',
+      );
+      _messages.add(
+        VoiceChatMessage(role: VoiceChatMessageRole.ai, text: aiResponse),
+      );
       notifyListeners();
       await _speak(aiResponse);
     } finally {
@@ -101,8 +115,19 @@ class VoiceChatProvider extends ChangeNotifier {
 
   String _buildContext() {
     final buffer = StringBuffer();
-    for (final m in _messages.where((m) => m.role == VoiceChatMessageRole.ai || m.role == VoiceChatMessageRole.user).take(10)) {
-      buffer.writeln(m.role == VoiceChatMessageRole.user ? 'Usuario: ${m.text}' : 'IA: ${m.text}');
+    for (final m
+        in _messages
+            .where(
+              (m) =>
+                  m.role == VoiceChatMessageRole.ai ||
+                  m.role == VoiceChatMessageRole.user,
+            )
+            .take(10)) {
+      buffer.writeln(
+        m.role == VoiceChatMessageRole.user
+            ? 'Usuario: ${m.text}'
+            : 'IA: ${m.text}',
+      );
     }
     return buffer.toString();
   }

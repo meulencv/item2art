@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:nfc_manager/nfc_manager.dart';
+import 'package:nfc_manager/nfc_manager_android.dart';
+import 'package:nfc_manager/nfc_manager_ios.dart';
+import '../models/memory.dart';
+import '../services/memory_service.dart';
 
 class NFCScanScreen extends StatefulWidget {
-  const NFCScanScreen({super.key});
+  final String memoryStory;
+
+  const NFCScanScreen({super.key, required this.memoryStory});
 
   @override
   State<NFCScanScreen> createState() => _NFCScanScreenState();
@@ -17,8 +24,10 @@ class _NFCScanScreenState extends State<NFCScanScreen>
   late Animation<double> _pulseAnimation;
   late Animation<double> _successAnimation;
 
+  final MemoryService _memoryService = MemoryService();
   bool _isScanning = true;
   bool _showSuccess = false;
+  String? _savedMemoryId;
 
   @override
   void initState() {
@@ -52,26 +61,132 @@ class _NFCScanScreenState extends State<NFCScanScreen>
       curve: Curves.elasticOut,
     );
 
-    // Simular detección de NFC después de 3 segundos
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        _simulateNFCDetection();
-      }
-    });
+    // Iniciar sesión NFC real
+    _startNFCSession();
   }
 
-  void _simulateNFCDetection() {
-    setState(() {
-      _isScanning = false;
-      _showSuccess = true;
-    });
-    _waveController.stop();
-    _pulseController.stop();
-    _successController.forward();
+  /// Inicia la sesión NFC para escuchar tags
+  /// Usa foreground dispatch para que SOLO esta app maneje el NFC
+  void _startNFCSession() async {
+    // Verificar disponibilidad de NFC
+    bool isAvailable = await NfcManager.instance.isAvailable();
+
+    if (!isAvailable) {
+      if (mounted) {
+        // Mostrar error al usuario
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'NFC no está disponible o está desactivado. Por favor, actívalo en configuración',
+            ),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Iniciar sesión NFC con foreground dispatch
+    // Esto evita que otras apps intercepten el NFC mientras esta pantalla está activa
+    NfcManager.instance.startSession(
+      pollingOptions: {NfcPollingOption.iso14443, NfcPollingOption.iso15693},
+      onDiscovered: (NfcTag tag) async {
+        // Obtener ID del tag
+        final String nfcTagId = _extractTagId(tag);
+
+        // Procesar el tag detectado
+        await _onNFCDetected(nfcTagId);
+      },
+    );
+  }
+
+  /// Extrae el ID único del tag NFC usando las clases de plataforma
+  String _extractTagId(NfcTag tag) {
+    try {
+      // Android: Intentar obtener del tag genérico primero
+      final nfcTagAndroid = NfcTagAndroid.from(tag);
+      if (nfcTagAndroid != null && nfcTagAndroid.id.isNotEmpty) {
+        return nfcTagAndroid.id
+            .map((e) => e.toRadixString(16).padLeft(2, '0'))
+            .join(':')
+            .toUpperCase();
+      }
+
+      // iOS: Intentar obtener de MiFare
+      final mifare = MiFareIos.from(tag);
+      if (mifare != null && mifare.identifier.isNotEmpty) {
+        return mifare.identifier
+            .map((e) => e.toRadixString(16).padLeft(2, '0'))
+            .join(':')
+            .toUpperCase();
+      }
+
+      // iOS: Intentar obtener de Iso15693
+      final iso15693 = Iso15693Ios.from(tag);
+      if (iso15693 != null && iso15693.identifier.isNotEmpty) {
+        return iso15693.identifier
+            .map((e) => e.toRadixString(16).padLeft(2, '0'))
+            .join(':')
+            .toUpperCase();
+      }
+
+      // iOS: Intentar obtener de FeliCa
+      final feliCa = FeliCaIos.from(tag);
+      if (feliCa != null && feliCa.currentIDm.isNotEmpty) {
+        return feliCa.currentIDm
+            .map((e) => e.toRadixString(16).padLeft(2, '0'))
+            .join(':')
+            .toUpperCase();
+      }
+    } catch (e) {
+      print('Error extrayendo ID del tag: $e');
+    }
+
+    // Fallback si no se puede extraer el ID
+    return 'NFC_${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  /// Procesa la detección de un tag NFC
+  Future<void> _onNFCDetected(String nfcTagId) async {
+    // Detener la sesión NFC inmediatamente para evitar múltiples lecturas
+    await NfcManager.instance.stopSession();
+
+    // Crear objeto Memory
+    final memory = Memory(
+      id: 'MEM_${DateTime.now().millisecondsSinceEpoch}',
+      story: widget.memoryStory,
+      nfcTagId: nfcTagId,
+      createdAt: DateTime.now(),
+    );
+
+    // Guardar en el servicio
+    final saved = await _memoryService.saveMemory(memory);
+
+    if (saved && mounted) {
+      setState(() {
+        _isScanning = false;
+        _showSuccess = true;
+        _savedMemoryId = memory.id;
+      });
+      _waveController.stop();
+      _pulseController.stop();
+      _successController.forward();
+
+      // Volver a home después de mostrar éxito
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          Navigator.popUntil(context, (route) => route.isFirst);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    // Detener la sesión NFC al salir de la pantalla
+    NfcManager.instance.stopSession();
+
     _waveController.dispose();
     _pulseController.dispose();
     _successController.dispose();
@@ -238,13 +353,24 @@ class _NFCScanScreenState extends State<NFCScanScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'Preparando tu recuerdo...',
+            '¡Recuerdo guardado exitosamente!',
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 16,
               letterSpacing: 0.5,
             ),
           ),
+          if (_savedMemoryId != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'ID: $_savedMemoryId',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 12,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
         ],
       ),
     );

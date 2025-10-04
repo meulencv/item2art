@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'nfc_scan_screen.dart';
+import 'create_memory_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -251,7 +251,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const NFCScanScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const CreateMemoryScreen(),
+                ),
               );
             },
           ),

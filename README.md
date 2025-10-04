@@ -16,6 +16,7 @@ Se usan variables en un archivo `.env` (no se sube al repositorio) gestionadas c
    - `ELEVENLABS_API_KEY`: desde https://elevenlabs.io
    - `GEMINI_API_KEY`: desde https://aistudio.google.com/app/apikey
    - `OPENROUTER_API_KEY`: (opcional) desde https://openrouter.ai
+   - `SUNO_API_TOKEN`: desde https://suno.com (panel de API). Puedes ajustar `SUNO_MODEL` si usas otra versión.
 3. Ajusta modelos si lo deseas (variables `GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL`, etc.)
 4. Asegúrate de NO subir el archivo `.env` (listado en `.gitignore`).
 
@@ -33,6 +34,8 @@ GEMINI_TEXT_MODEL=gemini-2.5-flash
 GEMINI_IMAGE_MODEL=gemini-2.5-flash-image
 ELEVENLABS_TTS_MODEL=eleven_multilingual_v2
 ELEVENLABS_STT_MODEL=eleven_turbo_v2
+SUNO_API_TOKEN=xxxxx
+SUNO_MODEL=V5
 ```
 
 ## Ejecución
@@ -51,6 +54,16 @@ Si ves un error indicando que faltan variables (por ejemplo en Supabase), revisa
 - Nunca publiques tus claves reales.
 - Regenera una clave si accidentalmente se expuso.
 - Considera un backend proxy para operaciones sensibles en producción.
+
+## Generación musical con Suno
+
+1. Selecciona el tipo **Música** en la pantalla de creación de recuerdos.
+2. Escribe la historia o concepto del track; Gemini resumirá el prompt.
+3. La app invoca a Suno (`generate` + `get`) y espera hasta que la canción esté lista.
+4. Se abre un diálogo con enlaces de streaming y descarga; puedes copiar los links antes de grabar el recuerdo en NFC.
+5. El texto almacenado incluye el resumen, el Task ID y los enlaces para reproducir o descargar la canción posteriormente.
+
+> Consejo: si Suno tarda demasiado o falla, revisa tu `SUNO_API_TOKEN` y vuelve a intentar; el flujo no grabará en la tarjeta hasta que confirmes el diálogo.
 
 ## Próximos pasos
 

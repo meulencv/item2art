@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:math' as math;
-import 'dart:convert';
 import 'nfc_scan_screen.dart';
 import '../services/gemini_service.dart';
 
@@ -70,285 +70,57 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
     super.dispose();
   }
 
-  Future<bool?> _showImagePreviewDialog(String text, String imageBase64) async {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0f0c29),
-                  Color(0xFF302b63),
-                  Color(0xFF24243e),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFF6B9D).withOpacity(0.3),
-                  blurRadius: 30,
-                  spreadRadius: 5,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFFFF6B9D).withOpacity(0.8),
-                        const Color(0xFFFEC163).withOpacity(0.8),
-                      ],
-                    ),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(22),
-                      topRight: Radius.circular(22),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.image, color: Colors.white, size: 28),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Imagen Generada',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Content
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Imagen generada
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.memory(
-                          base64Decode(imageBase64),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: 200,
-                              color: Colors.grey.shade800,
-                              child: const Center(
-                                child: Icon(
-                                  Icons.error_outline,
-                                  color: Colors.white,
-                                  size: 48,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Texto del recuerdo
-                      Text(
-                        'Contenido:',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Text(
-                          text,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Botones
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.2),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'Cancelar',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF667EEA),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'Continuar a NFC',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _continueToNFC() async {
-    if (_canContinue && !_isProcessing) {
-      setState(() {
-        _isProcessing = true;
-      });
+    if (!_canContinue || _isProcessing) return;
 
-      try {
-        final memoryTypeStr = _selectedMemoryType.toString().split('.').last;
-        
-        // Si es tipo imagen, procesar con Gemini Image API
-        if (_selectedMemoryType == MemoryType.imagen) {
-          final result = await GeminiService.processImageMemory(
-            _storyController.text.trim(),
-          );
+    setState(() {
+      _isProcessing = true;
+    });
 
-          setState(() {
-            _isProcessing = false;
-          });
+    try {
+      final selectedType = _selectedMemoryType;
+      if (selectedType == null) return;
 
-          if (!mounted) return;
+      final memoryTypeStr = selectedType.toString().split('.').last;
+      final inputText = _storyController.text.trim();
 
-          // Mostrar vista previa de la imagen generada
-          if (result['imagen'] != null) {
-            final shouldContinue = await _showImagePreviewDialog(
-              result['contenido'] ?? _storyController.text.trim(),
-              result['imagen']!,
-            );
+      // Procesar con Gemini (igual para todos los tipos)
+      final processedText = await GeminiService.processMemoryText(
+        inputText,
+        memoryTypeStr,
+      );
 
-            if (shouldContinue == true && mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => NFCScanScreen(
-                    memoryStory: result['contenido'] ?? _storyController.text.trim(),
-                    memoryType: memoryTypeStr,
-                    imageBase64: result['imagen'],
-                  ),
-                ),
-              );
-            }
-          } else {
-            // No se generó imagen
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('No se pudo generar la imagen. Intenta de nuevo.'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        } else {
-          // Para historia y música, procesar solo texto
-          final processedText = await GeminiService.processMemoryText(
-            _storyController.text.trim(),
-            memoryTypeStr,
-          );
+      if (!mounted) return;
 
-          setState(() {
-            _isProcessing = false;
-          });
-
-          if (!mounted) return;
-
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => NFCScanScreen(
-                memoryStory: processedText,
-                memoryType: memoryTypeStr,
-              ),
-            ),
-          );
-        }
-      } catch (e) {
-        print('Error procesando con IA: $e');
+      // Ir directo a NFC sin generar imagen/música en tiempo de escritura
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => NFCScanScreen(
+            memoryStory: processedText,
+            memoryType: memoryTypeStr,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Error procesando con IA: $e');
+      if (!mounted) return;
+      final fallbackType =
+          _selectedMemoryType?.toString().split('.').last ?? 'historia';
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => NFCScanScreen(
+            memoryStory: _storyController.text.trim(),
+            memoryType: fallbackType,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
         setState(() {
           _isProcessing = false;
         });
-        
-        // En caso de error, usar el texto original
-        if (!mounted) return;
-
-        final memoryTypeStr = _selectedMemoryType.toString().split('.').last;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => NFCScanScreen(
-              memoryStory: _storyController.text.trim(),
-              memoryType: memoryTypeStr,
-            ),
-          ),
-        );
       }
     }
   }

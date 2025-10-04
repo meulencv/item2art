@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:nfc_manager/nfc_manager.dart';
@@ -6,6 +7,7 @@ import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
 import '../services/gemini_service.dart';
 import '../services/supabase_service.dart';
+import '../services/suno_music_service.dart';
 import 'voice_chat_screen.dart';
 
 class ReadMemoryScreen extends StatefulWidget {
@@ -28,9 +30,10 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   String? _memoryType;
   String? _memoryContent;
   String? _errorMessage;
-  bool _isGeneratingImage =
-      false; // Para mostrar loading mientras genera imagen
-  String? _generatedImageBase64; // Imagen generada por OpenRouter
+  bool _isGeneratingImage = false;
+  String? _generatedImageBase64;
+  bool _isGeneratingMusic = false;
+  SunoSong? _generatedSong;
 
   @override
   void initState() {
@@ -171,8 +174,41 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           _generatedImageBase64 = generatedImage;
           _showContent = true;
         });
+      } else if (tipo == 'musica') {
+        // Si es música, generar canción con Suno (siempre se regenera dinámicamente)
+        setState(() {
+          _isGeneratingMusic = true;
+        });
+
+        try {
+          final sunoResult = await SunoMusicService.generateSongAndWait(
+            prompt: contenido,
+            pollInterval: const Duration(seconds: 4),
+            maxWait: const Duration(minutes: 3),
+          );
+
+          if (sunoResult.isComplete && sunoResult.songs.isNotEmpty) {
+            setState(() {
+              _isGeneratingMusic = false;
+              _generatedSong = sunoResult.songs.first;
+              _showContent = true;
+            });
+          } else {
+            setState(() {
+              _isGeneratingMusic = false;
+              _errorMessage =
+                  'No se pudo generar la música (estado: ${sunoResult.status})';
+            });
+          }
+        } catch (e) {
+          print('Error generando música: $e');
+          setState(() {
+            _isGeneratingMusic = false;
+            _errorMessage = 'Error al generar música: $e';
+          });
+        }
       } else {
-        // Para historia y música, solo mostrar el contenido
+        // Para historia, solo mostrar el contenido
         setState(() {
           _showContent = true;
         });
@@ -336,6 +372,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       return _buildErrorView();
     } else if (_isGeneratingImage) {
       return _buildGeneratingImageView();
+    } else if (_isGeneratingMusic) {
+      return _buildGeneratingMusicView();
     } else if (_showContent) {
       return _buildContentView();
     } else {
@@ -538,6 +576,96 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
     );
   }
 
+  Widget _buildGeneratingMusicView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Animated loading indicator
+          SizedBox(
+            width: 120,
+            height: 120,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Spinning circle
+                AnimatedBuilder(
+                  animation: _waveController,
+                  builder: (context, child) {
+                    return Transform.rotate(
+                      angle: _waveController.value * 2 * 3.14159,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF667EEA),
+                              const Color(0xFFFEC163),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                // Inner icon
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF0f0c29),
+                  ),
+                  child: const Icon(
+                    Icons.music_note,
+                    size: 50,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 40),
+
+          Text(
+            'Generando música...',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.white.withOpacity(0.95),
+              letterSpacing: 0.5,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: Text(
+              'Suno AI está componiendo una canción basada en tu recuerdo',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withOpacity(0.6),
+                fontWeight: FontWeight.w300,
+                height: 1.5,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          const CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFEC163)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildContentView() {
     if (_memoryType == null || _memoryContent == null) {
       return _buildErrorView();
@@ -697,6 +825,99 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                           Expanded(
                             child: Text(
                               'No se pudo generar la imagen',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Si es tipo música, mostrar la canción generada por Suno
+                  if (_memoryType == 'musica' && _generatedSong != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF667EEA).withOpacity(0.3),
+                            const Color(0xFFFEC163).withOpacity(0.2),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFFEC163).withOpacity(0.5),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.music_note,
+                                color: Color(0xFFFEC163),
+                                size: 28,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _generatedSong!.title ?? 'Canción generada',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          if (_generatedSong!.streamUrl != null &&
+                              _generatedSong!.streamUrl!.isNotEmpty) ...[
+                            _buildMusicLinkButton(
+                              'Reproducir',
+                              _generatedSong!.streamUrl!,
+                              Icons.play_circle_filled,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          if (_generatedSong!.downloadUrl != null &&
+                              _generatedSong!.downloadUrl!.isNotEmpty)
+                            _buildMusicLinkButton(
+                              'Descargar',
+                              _generatedSong!.downloadUrl!,
+                              Icons.download,
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ] else if (_memoryType == 'musica') ...[
+                    // Si no se pudo generar música, mostrar mensaje
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.orange.withOpacity(0.5),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.orange.shade300,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'No se pudo generar la música',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.9),
                                 fontSize: 14,
@@ -974,6 +1195,54 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMusicLinkButton(String label, String url, IconData icon) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          // Aquí podrías abrir el URL en un navegador o reproductor
+          // Por ahora solo copiamos al portapapeles
+          await Clipboard.setData(ClipboardData(text: url));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$label URL copiado al portapapeles'),
+                backgroundColor: const Color(0xFFFEC163),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Icon(Icons.copy, color: Colors.white.withOpacity(0.5), size: 16),
+            ],
+          ),
         ),
       ),
     );

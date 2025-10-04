@@ -57,9 +57,17 @@ class SupabaseService {
     try {
       final data = {'nfc_uuid': nfcUuid, 'tipo': tipo, 'contenido': contenido};
 
-      await client.from('memories').upsert(data);
+      final response = await client
+          .from('memories')
+          .upsert(data, onConflict: 'nfc_uuid')
+          .select();
 
-      print('✅ Recuerdo guardado en Supabase');
+      final updated = response.isNotEmpty;
+      print(
+        updated
+            ? '♻️ Recuerdo actualizado en Supabase'
+            : '✅ Recuerdo guardado en Supabase',
+      );
       print('   UUID: $nfcUuid');
       print('   Tipo: $tipo');
       print(

@@ -224,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         // Subtitle
         Text(
-          'Transforma objetos en arte',
+          'Turn objects into art',
           style: TextStyle(
             fontSize: 16,
             color: Colors.white.withOpacity(0.7),
@@ -244,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // Create Memory Button
           _buildMainButton(
             context: context,
-            label: 'Crear Recuerdo',
+            label: 'Create Memory',
             icon: Icons.add_circle_outline,
             gradient: const LinearGradient(
               colors: [Color(0xFFFF6B9D), Color(0xFFFEC163)],
@@ -264,7 +264,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // Access Memory Button
           _buildMainButton(
             context: context,
-            label: 'Acceder a Recuerdo',
+            label: 'Access Memory',
             icon: Icons.nfc,
             gradient: const LinearGradient(
               colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
@@ -336,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: Column(
         children: [
           Text(
-            'Cada objeto cuenta una historia.',
+            'Every object holds a story.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -347,7 +347,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 8),
           Text(
-            'Hazla arte.',
+            'Turn it into art.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,

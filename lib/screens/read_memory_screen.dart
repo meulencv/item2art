@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
+import '../services/audio_player_service.dart';
 import '../services/gemini_service.dart';
 import '../services/supabase_service.dart';
 import '../services/suno_music_service.dart';
@@ -36,6 +37,10 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   bool _isGeneratingMusic = false;
   SunoSong? _generatedSong;
 
+  // Unified audio player
+  AudioPlayerService? _audioService;
+  bool _isMusicPlaying = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,14 +70,17 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       curve: Curves.elasticOut,
     );
 
-    // Activar modo exclusivo NFC (solo Android)
+    // Enable NFC exclusive mode (Android only)
     NfcForegroundService.enable();
     _startNFCSession();
   }
 
   @override
   void dispose() {
-    // Desactivar modo exclusivo al salir
+    // Release the audio player
+    _audioService?.dispose();
+
+    // Disable exclusive mode when leaving
     NfcForegroundService.disable();
     NfcManager.instance.stopSession();
     _waveController.dispose();
@@ -87,7 +95,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
       if (!isAvailable) {
         setState(() {
-          _errorMessage = 'NFC no está disponible en este dispositivo';
+          _errorMessage = 'NFC is not available on this device';
         });
         return;
       }
@@ -99,26 +107,26 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
         },
       );
     } catch (e) {
-      print('Error iniciando sesión NFC: $e');
+      print('Error starting NFC session: $e');
       setState(() {
-        _errorMessage = 'Error al iniciar NFC: $e';
+        _errorMessage = 'Failed to start NFC: $e';
       });
     }
   }
 
   Future<void> _readFromNFC(NfcTag tag) async {
     try {
-      print('📱 Tarjeta NFC detectada');
+      print('📱 NFC tag detected');
 
       String? uuid;
 
-      // Intentar leer UUID desde Android
+      // Try to read the UUID from Android first
       final ndefAndroid = NdefAndroid.from(tag);
       if (ndefAndroid != null) {
         uuid = await _readUuidFromNdefAndroid(ndefAndroid);
       }
 
-      // Si no funcionó con Android, intentar con iOS
+      // If Android fails, try with iOS
       if (uuid == null) {
         final ndefIos = NdefIos.from(tag);
         if (ndefIos != null) {
@@ -128,31 +136,31 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
       if (uuid == null) {
         setState(() {
-          _errorMessage = 'Esta tarjeta no contiene un UUID válido';
+          _errorMessage = 'This tag does not contain a valid UUID';
         });
         return;
       }
 
-      print('� UUID leído: $uuid');
+      print('🔖 UUID read: $uuid');
 
-      // Obtener datos desde Supabase usando el UUID
+      // Retrieve data from Supabase using the UUID
       final memoryData = await SupabaseService.getMemoryByUuid(uuid);
 
       if (memoryData == null) {
         setState(() {
           _errorMessage =
-              'No se encontró información para este UUID en la base de datos';
+              'No information was found for this UUID in the database';
         });
         return;
       }
 
-      // Extraer tipo y contenido
+      // Extract memory type and content
       final tipo = memoryData['tipo'] as String?;
       final contenido = memoryData['contenido'] as String?;
 
       if (tipo == null || contenido == null) {
         setState(() {
-          _errorMessage = 'Formato de datos incorrecto en la base de datos';
+          _errorMessage = 'Incorrect data format in the database';
         });
         return;
       }
@@ -164,8 +172,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
       await NfcManager.instance.stopSession();
 
-      // Si es tipo imagen, generar imagen con Gemini (siempre se regenera dinámicamente)
-      if (tipo == 'imagen') {
+      // If the type is image, generate artwork with Gemini (regenerated on demand)
+      if (tipo == 'image') {
         setState(() {
           _isGeneratingImage = true;
         });
@@ -179,8 +187,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           _generatedImageBase64 = generatedImage;
           _showContent = true;
         });
-      } else if (tipo == 'musica') {
-        // Si es música, generar canción con Suno (siempre se regenera dinámicamente)
+      } else if (tipo == 'music') {
+        // If the type is music, generate a song with Suno (regenerated on demand)
         setState(() {
           _isGeneratingMusic = true;
         });
@@ -202,18 +210,18 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
             setState(() {
               _isGeneratingMusic = false;
               _errorMessage =
-                  'No se pudo generar la música (estado: ${sunoResult.status})';
+                  'Music generation failed (status: ${sunoResult.status})';
             });
           }
         } catch (e) {
-          print('Error generando música: $e');
+          print('Error generating music: $e');
           setState(() {
             _isGeneratingMusic = false;
-            _errorMessage = 'Error al generar música: $e';
+            _errorMessage = 'Failed to generate music: $e';
           });
         }
       } else {
-        // Para historia, solo mostrar el contenido
+        // For story, simply show the content
         setState(() {
           _showContent = true;
         });
@@ -221,23 +229,23 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
       _successController.forward();
     } catch (e) {
-      print('Error leyendo NFC: $e');
+      print('Error reading NFC: $e');
       setState(() {
-        _errorMessage = 'Error al leer la tarjeta: $e';
+        _errorMessage = 'Failed to read the tag: $e';
       });
     }
   }
 
   Future<String?> _readUuidFromNdefAndroid(NdefAndroid ndefAndroid) async {
     try {
-      // Primero intentar con el mensaje cacheado
+      // Try the cached message first
       if (ndefAndroid.cachedNdefMessage != null &&
           ndefAndroid.cachedNdefMessage!.records.isNotEmpty) {
         final firstRecord = ndefAndroid.cachedNdefMessage!.records[0];
         return _decodeNdefTextPayload(firstRecord.payload);
       }
 
-      // Si no hay mensaje cacheado, intentar leer
+      // If there isn't a cached message, try reading it
       final message = await ndefAndroid.getNdefMessage();
       if (message != null && message.records.isNotEmpty) {
         final firstRecord = message.records[0];
@@ -246,21 +254,21 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
       return null;
     } catch (e) {
-      print('Error leyendo UUID Android NDEF: $e');
+      print('Error reading Android NDEF UUID: $e');
       return null;
     }
   }
 
   Future<String?> _readUuidFromNdefIos(NdefIos ndefIos) async {
     try {
-      // Primero intentar con el mensaje cacheado
+      // Try the cached message first
       if (ndefIos.cachedNdefMessage != null &&
           ndefIos.cachedNdefMessage!.records.isNotEmpty) {
         final firstRecord = ndefIos.cachedNdefMessage!.records[0];
         return _decodeNdefTextPayload(firstRecord.payload);
       }
 
-      // Si no hay mensaje cacheado, intentar leer
+      // If there isn't a cached message, try reading it
       final message = await ndefIos.readNdef();
       if (message != null && message.records.isNotEmpty) {
         final firstRecord = message.records[0];
@@ -269,7 +277,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
       return null;
     } catch (e) {
-      print('Error leyendo iOS NDEF: $e');
+      print('Error reading iOS NDEF: $e');
       return null;
     }
   }
@@ -277,25 +285,28 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   String _decodeNdefTextPayload(Uint8List bytes) {
     if (bytes.isEmpty) return '';
 
-    // El primer byte contiene información de codificación y longitud del idioma
+    // The first byte contains encoding info and language length
     int languageCodeLength = bytes[0] & 0x3F;
 
-    // Saltar el byte de estado y el código de idioma
+    // Skip the status byte and the language code
     int textStart = 1 + languageCodeLength;
 
     if (textStart >= bytes.length) return '';
 
-    // El resto son los bytes del texto en UTF-8
+    // The remainder contains the UTF-8 text bytes
     return utf8.decode(bytes.sublist(textStart));
   }
 
   IconData _getIconForType(String type) {
     switch (type.toLowerCase()) {
+      case 'story':
       case 'historia':
         return Icons.book;
+      case 'music':
       case 'musica':
       case 'música':
         return Icons.music_note;
+      case 'image':
       case 'imagen':
         return Icons.image;
       default:
@@ -305,11 +316,14 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
   Color _getColorForType(String type) {
     switch (type.toLowerCase()) {
+      case 'story':
       case 'historia':
         return const Color(0xFF667EEA);
+      case 'music':
       case 'musica':
       case 'música':
         return const Color(0xFFFEC163);
+      case 'image':
       case 'imagen':
         return const Color(0xFFFF6B9D);
       default:
@@ -357,7 +371,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           ),
           const Spacer(),
           Text(
-            'Acceder a Recuerdo',
+            'Access Memory',
             style: TextStyle(
               color: Colors.white.withOpacity(0.9),
               fontSize: 18,
@@ -466,7 +480,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           const SizedBox(height: 40),
 
           Text(
-            'Acerca tu objeto',
+            'Bring your object close',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -480,7 +494,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 48),
             child: Text(
-              'Coloca el objeto con la tarjeta NFC cerca de tu dispositivo para leer el recuerdo',
+              'Hold the object with the NFC tag near your device to read the memory',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
@@ -546,7 +560,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           const SizedBox(height: 40),
 
           Text(
-            'Generando imagen...',
+            'Generating image...',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -560,7 +574,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 48),
             child: Text(
-              'La IA está creando una imagen basada en tu recuerdo',
+              'AI is creating an image based on your memory',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
@@ -636,7 +650,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           const SizedBox(height: 40),
 
           Text(
-            'Generando música...',
+            'Generating music...',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -650,7 +664,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 48),
             child: Text(
-              'Suno AI está componiendo una canción basada en tu recuerdo',
+              'Suno AI is composing a song based on your memory',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
@@ -770,8 +784,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Si es tipo imagen, mostrar la imagen generada por OpenRouter
-                  if (_memoryType == 'imagen' &&
+                  // If the memory type is image, display the generated artwork
+                  if ((_memoryType == 'image' || _memoryType == 'imagen') &&
                       _generatedImageBase64 != null &&
                       _generatedImageBase64!.isNotEmpty) ...[
                     ClipRRect(
@@ -795,7 +809,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Error al cargar imagen',
+                                    'Error loading image',
                                     style: TextStyle(
                                       color: Colors.white.withOpacity(0.5),
                                       fontSize: 14,
@@ -809,8 +823,9 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                       ),
                     ),
                     const SizedBox(height: 20),
-                  ] else if (_memoryType == 'imagen') ...[
-                    // Si no se pudo generar imagen, mostrar mensaje
+                  ] else if (_memoryType == 'image' ||
+                      _memoryType == 'imagen') ...[
+                    // If the image could not be generated, show a message
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -829,7 +844,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'No se pudo generar la imagen',
+                              'Failed to generate the image',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.9),
                                 fontSize: 14,
@@ -842,8 +857,8 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                     const SizedBox(height: 20),
                   ],
 
-                  // Si es tipo música, mostrar la canción generada por Suno
-                  if (_memoryType == 'musica' && _generatedSong != null) ...[
+                  // If the memory type is music, show the Suno-generated song
+                  if (_memoryType == 'music' && _generatedSong != null) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -871,7 +886,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  _generatedSong!.title ?? 'Canción generada',
+                                  _generatedSong!.title ?? 'Generated song',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
@@ -885,7 +900,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                           if (_generatedSong!.streamUrl != null &&
                               _generatedSong!.streamUrl!.isNotEmpty) ...[
                             _buildMusicLinkButton(
-                              'Reproducir',
+                              'Play',
                               _generatedSong!.streamUrl!,
                               Icons.play_circle_filled,
                             ),
@@ -894,7 +909,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                           if (_generatedSong!.downloadUrl != null &&
                               _generatedSong!.downloadUrl!.isNotEmpty)
                             _buildMusicLinkButton(
-                              'Descargar',
+                              'Download',
                               _generatedSong!.downloadUrl!,
                               Icons.download,
                             ),
@@ -902,8 +917,10 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                       ),
                     ),
                     const SizedBox(height: 20),
-                  ] else if (_memoryType == 'musica') ...[
-                    // Si no se pudo generar música, mostrar mensaje
+                  ] else if (_memoryType == 'music' ||
+                      _memoryType == 'musica' ||
+                      _memoryType == 'música') ...[
+                    // If the music could not be generated, show a message
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -922,7 +939,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'No se pudo generar la música',
+                              'Failed to generate the music',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.9),
                                 fontSize: 14,
@@ -936,7 +953,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                   ],
 
                   Text(
-                    'Tu Recuerdo',
+                    'Your Memory',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -994,7 +1011,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                       Icon(Icons.home, color: Colors.white, size: 24),
                       SizedBox(width: 12),
                       Text(
-                        'Volver al Inicio',
+                        'Back to Home',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -1010,14 +1027,16 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
             const SizedBox(height: 16),
 
-            if (_memoryType != null && _memoryType!.toLowerCase() == 'historia')
+            if (_memoryType != null &&
+                (_memoryType!.toLowerCase() == 'story' ||
+                    _memoryType!.toLowerCase() == 'historia'))
               Material(
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: () async {
-                    // Navegar a pantalla de chat voz pasando el contenido
+                    // Navigate to the voice chat screen with the memory content
                     final content = _memoryContent!;
-                    // Carga diferida para evitar dependencias circulares: import dinámico
+                    // Lazy load to avoid circular dependencies: dynamic import
                     // ignore: use_build_context_synchronously
                     Navigator.push(
                       context,
@@ -1057,7 +1076,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                         ),
                         SizedBox(width: 12),
                         Text(
-                          'Hablar con el Recuerdo',
+                          'Talk to the Memory',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -1111,7 +1130,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
             const SizedBox(height: 32),
 
             Text(
-              'Error al leer',
+              'Read error',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -1122,7 +1141,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
             const SizedBox(height: 16),
 
             Text(
-              _errorMessage ?? 'Ocurrió un error desconocido',
+              _errorMessage ?? 'An unknown error occurred',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
@@ -1173,7 +1192,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                       Icon(Icons.refresh, color: Colors.white, size: 24),
                       SizedBox(width: 12),
                       Text(
-                        'Intentar de Nuevo',
+                        'Try Again',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -1192,7 +1211,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(
-                'Volver al Inicio',
+                'Back to Home',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.7),
                   fontSize: 16,
@@ -1206,38 +1225,56 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   }
 
   Widget _buildMusicLinkButton(String label, String url, IconData icon) {
+    final bool isPlayButton = icon == Icons.play_circle_filled;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () async {
-          // Aquí podrías abrir el URL en un navegador o reproductor
-          // Por ahora solo copiamos al portapapeles
-          await Clipboard.setData(ClipboardData(text: url));
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('$label URL copiado al portapapeles'),
-                backgroundColor: const Color(0xFFFEC163),
-                duration: const Duration(seconds: 2),
-              ),
-            );
+          if (isPlayButton) {
+            // Play the track inside the app
+            await _playMusic(url);
+          } else {
+            // Copy the download URL to the clipboard
+            await Clipboard.setData(ClipboardData(text: url));
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$label URL copied to clipboard'),
+                  backgroundColor: const Color(0xFFFEC163),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
           }
         },
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: isPlayButton && _isMusicPlaying
+                ? const Color(0xFFFEC163).withOpacity(0.3)
+                : Colors.white.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(0.3)),
+            border: Border.all(
+              color: isPlayButton && _isMusicPlaying
+                  ? const Color(0xFFFEC163)
+                  : Colors.white.withOpacity(0.3),
+            ),
           ),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: 20),
+              Icon(
+                _isMusicPlaying && isPlayButton
+                    ? Icons.pause_circle_filled
+                    : icon,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  label,
+                  _isMusicPlaying && isPlayButton ? 'Pause' : label,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -1245,11 +1282,51 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                   ),
                 ),
               ),
-              Icon(Icons.copy, color: Colors.white.withOpacity(0.5), size: 16),
+              if (!isPlayButton)
+                Icon(
+                  Icons.copy,
+                  color: Colors.white.withOpacity(0.5),
+                  size: 16,
+                ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _playMusic(String url) async {
+    try {
+      // Lazily initialize the service if needed
+      _audioService ??= AudioPlayerService();
+
+      // Listen for state changes
+      _audioService!.playerStateStream.listen((state) {
+        if (mounted) {
+          setState(() {
+            _isMusicPlaying = state.playing;
+          });
+        }
+      });
+
+      if (_isMusicPlaying) {
+        // Pause if it's already playing
+        await _audioService!.pause();
+      } else {
+        // Start playback
+        await _audioService!.playFromUrl(url);
+      }
+    } catch (e) {
+      print('❌ Error playing music: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error playing music: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 }

@@ -1,8 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-/// Servicio para interactuar con Supabase
-/// Carga configuración desde variables de entorno (.env)
+/// Service responsible for interacting with Supabase.
+/// Loads configuration from environment variables (.env).
 class SupabaseService {
   static final String _supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
   static final String _supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
@@ -14,15 +14,15 @@ class SupabaseService {
 
   static bool get isInitialized => _client != null;
 
-  /// Inicializa Supabase (llamar una vez al inicio de la app)
+  /// Initializes Supabase (call once at app startup).
   static Future<void> initialize() async {
     if (_client != null) return;
     if (!isConfigured) {
-      // No lanzar excepción: solo log para no bloquear la app
-      // Podremos mostrar una UI más adelante si se requiere Supabase.
+      // Do not throw: just log so the app keeps running.
+      // We can later surface UI if Supabase becomes mandatory.
       // ignore: avoid_print
       print(
-        '⚠️ Supabase no configurado (faltan SUPABASE_URL / SUPABASE_ANON_KEY)',
+        '⚠️ Supabase not configured (missing SUPABASE_URL / SUPABASE_ANON_KEY)',
       );
       return;
     }
@@ -30,28 +30,29 @@ class SupabaseService {
     await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey);
     _client = Supabase.instance.client;
     // ignore: avoid_print
-    print('✅ Supabase inicializado');
+    print('✅ Supabase initialized');
   }
 
-  /// Obtiene el cliente de Supabase (asegura que esté inicializado)
+  /// Retrieves the Supabase client (ensures it is initialized).
   static SupabaseClient get client {
     if (_client == null) {
       throw Exception(
-        'Supabase no está inicializado. Configura variables y llama a SupabaseService.initialize().',
+        'Supabase is not initialized. Configure variables and call SupabaseService.initialize().',
       );
     }
     return _client!;
   }
 
-  /// Guarda un recuerdo en Supabase usando el UUID de la tarjeta NFC
-  /// Retorna true si se guardó exitosamente
+  /// Saves a memory in Supabase using the NFC card UUID.
+  /// Returns true when the operation succeeds.
+  /// Note: parameter names remain in Spanish (`tipo`, `contenido`) to match the Supabase schema.
   static Future<bool> saveMemory({
     required String nfcUuid,
     required String tipo,
     required String contenido,
   }) async {
     if (!isInitialized) {
-      print('⚠️ Guardado omitido: Supabase no inicializado');
+      print('⚠️ Skipped save: Supabase not initialized');
       return false;
     }
     try {
@@ -65,27 +66,27 @@ class SupabaseService {
       final updated = response.isNotEmpty;
       print(
         updated
-            ? '♻️ Recuerdo actualizado en Supabase'
-            : '✅ Recuerdo guardado en Supabase',
+            ? '♻️ Memory updated in Supabase'
+            : '✅ Memory saved in Supabase',
       );
       print('   UUID: $nfcUuid');
-      print('   Tipo: $tipo');
+      print('   Type: $tipo');
       print(
-        '   Contenido: ${contenido.substring(0, contenido.length > 50 ? 50 : contenido.length)}...',
+        '   Content: ${contenido.substring(0, contenido.length > 50 ? 50 : contenido.length)}...',
       );
 
       return true;
     } catch (e) {
-      print('❌ Error al guardar en Supabase: $e');
+      print('❌ Error saving to Supabase: $e');
       return false;
     }
   }
 
-  /// Obtiene un recuerdo desde Supabase usando el UUID de la tarjeta NFC
-  /// Retorna un Map con 'tipo' y 'contenido'
+  /// Fetches a memory from Supabase using the NFC card UUID.
+  /// Returns a map containing 'tipo' and 'contenido'.
   static Future<Map<String, dynamic>?> getMemoryByUuid(String nfcUuid) async {
     if (!isInitialized) {
-      print('⚠️ Lectura omitida: Supabase no inicializado');
+      print('⚠️ Skipped read: Supabase not initialized');
       return null;
     }
     try {
@@ -96,36 +97,36 @@ class SupabaseService {
           .maybeSingle();
 
       if (response == null) {
-        print('⚠️ No se encontró recuerdo para UUID: $nfcUuid');
+        print('⚠️ No memory found for UUID: $nfcUuid');
         return null;
       }
 
-      print('✅ Recuerdo recuperado desde Supabase');
+      print('✅ Memory retrieved from Supabase');
       print('   UUID: $nfcUuid');
-      print('   Tipo: ${response['tipo']}');
+      print("   Type: ${response['tipo']}");
 
       return {
         'tipo': response['tipo'] as String,
         'contenido': response['contenido'] as String,
       };
     } catch (e) {
-      print('❌ Error al obtener recuerdo desde Supabase: $e');
+      print('❌ Error fetching memory from Supabase: $e');
       return null;
     }
   }
 
-  /// Elimina un recuerdo de Supabase usando el UUID
+  /// Deletes a memory from Supabase using the UUID.
   static Future<bool> deleteMemory(String nfcUuid) async {
     if (!isInitialized) {
-      print('⚠️ Eliminación omitida: Supabase no inicializado');
+      print('⚠️ Skipped delete: Supabase not initialized');
       return false;
     }
     try {
       await client.from('memories').delete().eq('nfc_uuid', nfcUuid);
-      print('✅ Recuerdo eliminado de Supabase (UUID: $nfcUuid)');
+      print('✅ Memory deleted from Supabase (UUID: $nfcUuid)');
       return true;
     } catch (e) {
-      print('❌ Error al eliminar recuerdo de Supabase: $e');
+      print('❌ Error deleting memory from Supabase: $e');
       return false;
     }
   }

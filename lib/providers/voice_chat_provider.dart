@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:record/record.dart';
+import '../services/audio_player_service.dart';
 import '../services/elevenlabs_service.dart';
 import '../services/gemini_service.dart';
 
@@ -21,7 +21,7 @@ class VoiceChatProvider extends ChangeNotifier {
   bool _isProcessing = false;
   bool _isPlaying = false;
 
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayerService _audioService = AudioPlayerService();
   final AudioRecorder _recorder = AudioRecorder();
 
   List<VoiceChatMessage> get messages => List.unmodifiable(_messages);
@@ -30,7 +30,7 @@ class VoiceChatProvider extends ChangeNotifier {
   bool get isPlaying => _isPlaying;
 
   Future<void> disposePlayer() async {
-    await _player.dispose();
+    await _audioService.dispose();
   }
 
   void addSystemIntro(String introText) {
@@ -54,7 +54,7 @@ class VoiceChatProvider extends ChangeNotifier {
     if (_isRecording) return;
     final hasPermission = await _recorder.hasPermission();
     if (!hasPermission) {
-      return; // TODO: manejar UI permiso
+      return; // TODO: handle permission UI
     }
     _isRecording = true;
     notifyListeners();
@@ -88,20 +88,17 @@ class VoiceChatProvider extends ChangeNotifier {
       final file = File(path);
       final userText =
           await ElevenLabsService.speechToText(file) ??
-          '[No se pudo transcribir]';
+          '[Transcription failed]';
       _messages.add(
         VoiceChatMessage(role: VoiceChatMessageRole.user, text: userText),
       );
       notifyListeners();
 
-      // Obtener respuesta de Gemini usando historial limitado
+      // Fetch Gemini's reply using a trimmed conversation history.
       final contextText = _buildContext();
       final prompt =
-          'Contexto del recuerdo:\n$contextText\n\nPregunta/usuario: $userText\n\nResponde de forma breve y empática.';
-      final aiResponse = await GeminiService.processMemoryText(
-        prompt,
-        'historia',
-      );
+          'Memory context:\n$contextText\n\nUser question: $userText\n\nReply briefly and empathetically.';
+      final aiResponse = await GeminiService.processMemoryText(prompt, 'story');
       _messages.add(
         VoiceChatMessage(role: VoiceChatMessageRole.ai, text: aiResponse),
       );
@@ -125,8 +122,8 @@ class VoiceChatProvider extends ChangeNotifier {
             .take(10)) {
       buffer.writeln(
         m.role == VoiceChatMessageRole.user
-            ? 'Usuario: ${m.text}'
-            : 'IA: ${m.text}',
+            ? 'User: ${m.text}'
+            : 'AI: ${m.text}',
       );
     }
     return buffer.toString();
@@ -138,11 +135,10 @@ class VoiceChatProvider extends ChangeNotifier {
     try {
       final file = await ElevenLabsService.textToSpeech(text);
       if (file != null) {
-        await _player.setFilePath(file.path);
-        await _player.play();
+        await _audioService.playFromFile(file);
       }
     } catch (e) {
-      if (kDebugMode) print('Error reproduciendo audio: $e');
+      if (kDebugMode) print('Audio playback error: $e');
     } finally {
       _isPlaying = false;
       notifyListeners();

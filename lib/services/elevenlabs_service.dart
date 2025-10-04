@@ -4,10 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-/// Servicio para interactuar con ElevenLabs (TTS y STT simples)
-/// Nota: Para producción mover las claves a backend o a un servicio seguro.
+/// Service for interacting with ElevenLabs (basic TTS and STT)
+/// Note: In production, move API keys to a backend or secure service.
 class ElevenLabsService {
-  // Variables obtenidas desde dotenv (.env)
+  // Variables loaded from dotenv (.env)
   static final String _apiKey = dotenv.env['ELEVENLABS_API_KEY'] ?? '';
   static final String _baseUrl = 'https://api.elevenlabs.io';
   static final String _defaultVoiceId =
@@ -19,10 +19,10 @@ class ElevenLabsService {
 
   static bool get isConfigured => _apiKey.isNotEmpty;
 
-  /// Convierte texto a bytes de audio (mp3) y retorna un archivo temporal listo para reproducir.
+  /// Converts text into MP3 audio and returns a ready-to-play temp file.
   static Future<File?> textToSpeech(String text) async {
     if (!isConfigured) {
-      print('⚠️ ElevenLabs API key no configurada');
+      print('⚠️ ElevenLabs API key not configured');
       return null;
     }
     try {
@@ -46,20 +46,20 @@ class ElevenLabsService {
         await file.writeAsBytes(bytes, flush: true);
         return file;
       } else {
-        print('❌ Error TTS ElevenLabs: ${resp.statusCode} ${resp.body}');
+        print('❌ ElevenLabs TTS error: ${resp.statusCode} ${resp.body}');
         return null;
       }
     } catch (e) {
-      print('❌ Excepción TTS: $e');
+      print('❌ TTS exception: $e');
       return null;
     }
   }
 
-  /// Envía un archivo de audio para transcribir.
-  /// El archivo debe ser un formato soportado (mp3/m4a/wav). Devuelve texto o null.
+  /// Sends an audio file for transcription.
+  /// The file must be in a supported format (mp3/m4a/wav). Returns text or null.
   static Future<String?> speechToText(File audioFile) async {
     if (!isConfigured) {
-      print('⚠️ ElevenLabs API key no configurada');
+      print('⚠️ ElevenLabs API key not configured');
       return null;
     }
     try {
@@ -74,13 +74,13 @@ class ElevenLabsService {
 
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
-        return data['text'] as String?; // Respuesta simple
+        return data['text'] as String?; // Simple response
       } else {
-        print('❌ Error STT ElevenLabs: ${resp.statusCode} ${resp.body}');
+        print('❌ ElevenLabs STT error: ${resp.statusCode} ${resp.body}');
         return null;
       }
     } catch (e) {
-      print('❌ Excepción STT: $e');
+      print('❌ STT exception: $e');
       return null;
     }
   }

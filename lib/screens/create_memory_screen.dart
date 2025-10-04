@@ -11,7 +11,7 @@ class CreateMemoryScreen extends StatefulWidget {
   State<CreateMemoryScreen> createState() => _CreateMemoryScreenState();
 }
 
-enum MemoryType { historia, musica, imagen }
+enum MemoryType { story, music, image }
 
 class _CreateMemoryScreenState extends State<CreateMemoryScreen>
     with TickerProviderStateMixin {
@@ -84,7 +84,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
       final memoryTypeStr = selectedType.toString().split('.').last;
       final inputText = _storyController.text.trim();
 
-      // Procesar con Gemini (igual para todos los tipos)
+      // Process with Gemini (same for every type)
       final processedText = await GeminiService.processMemoryText(
         inputText,
         memoryTypeStr,
@@ -92,7 +92,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
 
       if (!mounted) return;
 
-      // Ir directo a NFC sin generar imagen/música en tiempo de escritura
+      // Go straight to NFC without generating image/music during writing
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -103,10 +103,10 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
         ),
       );
     } catch (e) {
-      print('Error procesando con IA: $e');
+      print('AI processing error: $e');
       if (!mounted) return;
       final fallbackType =
-          _selectedMemoryType?.toString().split('.').last ?? 'historia';
+          _selectedMemoryType?.toString().split('.').last ?? 'story';
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -238,7 +238,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
           ),
           const Spacer(),
           Text(
-            'Crear Recuerdo',
+            'Create Memory',
             style: TextStyle(
               color: Colors.white.withOpacity(0.9),
               fontSize: 18,
@@ -260,7 +260,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Tipo de Recuerdo',
+            'Memory Type',
             style: TextStyle(
               color: Colors.white.withOpacity(0.9),
               fontSize: 18,
@@ -273,25 +273,25 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
             children: [
               Expanded(
                 child: _buildMemoryTypeCard(
-                  type: MemoryType.historia,
+                  type: MemoryType.story,
                   icon: Icons.book,
-                  label: 'Historia',
+                  label: 'Story',
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildMemoryTypeCard(
-                  type: MemoryType.musica,
+                  type: MemoryType.music,
                   icon: Icons.music_note,
-                  label: 'Música',
+                  label: 'Music',
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildMemoryTypeCard(
-                  type: MemoryType.imagen,
+                  type: MemoryType.image,
                   icon: Icons.image,
-                  label: 'Imagen',
+                  label: 'Image',
                 ),
               ),
             ],
@@ -401,7 +401,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
               ),
               const SizedBox(height: 24),
               Text(
-                'Cuenta tu historia',
+                'Tell your story',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
@@ -413,7 +413,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  'Escribe la semilla del recuerdo que quieres vincular a este objeto',
+                  'Write the seed of the memory you want to link to this object',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
@@ -465,8 +465,8 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
         ),
         decoration: InputDecoration(
           hintText:
-              'Ej: "Aventura, dragones, me sentí valiente"\n\n'
-              'Describe emociones, momentos clave o anécdotas que quieres preservar...',
+              'E.g., "Adventure, dragons, I felt brave"\n\n'
+              'Describe emotions, key moments, or anecdotes you want to preserve...',
           hintStyle: TextStyle(
             color: Colors.white.withOpacity(0.4),
             fontSize: 15,
@@ -490,7 +490,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          count > 10 ? '✓ Mínimo alcanzado' : 'Escribe al menos 10 caracteres',
+          count > 10 ? '✓ Minimum reached' : 'Write at least 10 characters',
           style: TextStyle(
             color: color,
             fontSize: 13,
@@ -567,7 +567,7 @@ class _CreateMemoryScreenState extends State<CreateMemoryScreen>
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          'Continuar al Escaneo NFC',
+                          'Continue to NFC Scan',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,

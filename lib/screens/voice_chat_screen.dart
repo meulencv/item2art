@@ -16,7 +16,7 @@ class VoiceChatScreen extends StatelessWidget {
   }
 
   String _buildIntro(String text) {
-    return 'Este es el recuerdo leído en la etiqueta NFC. Empezaré contándote un poco y puedes preguntarme lo que quieras sobre él.\n\n$text';
+    return 'This is the memory read from the NFC tag. I will start by telling you a little about it, and you can ask me anything you want.\n\n$text';
   }
 }
 
@@ -54,7 +54,7 @@ class _VoiceChatViewState extends State<_VoiceChatView> {
       backgroundColor: const Color(0xFF0f0c29),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text('Chat de Voz'),
+        title: const Text('Voice Chat'),
       ),
       body: Column(
         children: [
@@ -141,15 +141,15 @@ class _VoiceChatViewState extends State<_VoiceChatView> {
                           ),
                           SizedBox(width: 12),
                           Text(
-                            'Procesando...',
+                            'Processing...',
                             style: TextStyle(color: Colors.white70),
                           ),
                         ],
                       )
                     : Text(
                         provider.isRecording
-                            ? 'Grabando... suelta para enviar'
-                            : 'Mantén pulsado para hablar',
+                            ? 'Recording... release to send'
+                            : 'Hold to speak',
                         key: ValueKey(provider.isRecording ? 'rec' : 'idle'),
                         textAlign: TextAlign.center,
                         style: TextStyle(

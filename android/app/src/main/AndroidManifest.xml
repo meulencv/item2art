@@ -1,10 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Permiso NFC requerido para usar nfc_manager -->
+    <!-- NFC permission required by nfc_manager -->
     <uses-permission android:name="android.permission.NFC" />
-    <!-- Permiso para grabar audio (chat de voz) -->
+    <!-- Permission to record audio (voice chat) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Declaración de característica NFC (no obligatoria en todos dispositivos) -->
+    <!-- NFC feature declaration (not mandatory on every device) -->
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <application
         android:label="item2art"

@@ -7,16 +7,14 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 Future<void> _loadEnv() async {
   try {
     await dotenv.load(fileName: '.env');
-    debugPrint('✅ .env cargado');
+    debugPrint('✅ .env loaded');
   } catch (e) {
-    debugPrint('⚠️ No se encontró .env, intentando .env.example. Error: $e');
+    debugPrint('⚠️ .env not found, trying .env.example. Error: $e');
     try {
       await dotenv.load(fileName: '.env.example');
-      debugPrint(
-        '✅ .env.example cargado como fallback (usa valores de ejemplo)',
-      );
+      debugPrint('✅ .env.example loaded as fallback (using sample values)');
     } catch (e2) {
-      debugPrint('❌ No se pudo cargar ninguna configuración de entorno: $e2');
+      debugPrint('❌ Unable to load any environment configuration: $e2');
     }
   }
 }
@@ -26,11 +24,11 @@ void main() async {
 
   await _loadEnv();
 
-  // Inicializar Supabase (no abortar app si falla, solo loguear)
+  // Initialize Supabase (don't abort the app on failure, just log)
   try {
     await SupabaseService.initialize();
   } catch (e) {
-    debugPrint('⚠️ Supabase no inicializado: $e');
+    debugPrint('⚠️ Supabase not initialized: $e');
   }
 
   // Set system UI overlay style

@@ -35,28 +35,28 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   
-  # NFC Manager para lectura/escritura de tags NFC
+  # NFC manager for reading/writing NFC tags
   nfc_manager: ^4.0.2
   
-  # NDEF Record para crear registros NFC
+  # NDEF record helpers for creating NFC payloads
   ndef_record: ^1.2.1
   ndef: ^0.3.4
   
-  # HTTP para llamadas a la API de Gemini
+  # HTTP client for Gemini API calls
   http: ^1.2.0
-  # Reproducción de audio para TTS
+  # Audio playback for TTS
   just_audio: ^0.9.42
-  # Grabación de audio (PCM / m4a) para STT
+  # Audio recording (PCM / m4a) for STT
   record: ^6.1.2
-  # Permisos micrófono
+  # Microphone permissions
   permission_handler: ^11.3.1
-  # Acceso a directorios temporales
+  # Access to temporary directories
   path_provider: ^2.1.4
-  # Estado para conversación
+  # State management for the conversation
   provider: ^6.0.5
-  # Supabase para backend
+  # Supabase backend client
   supabase_flutter: ^2.9.1
-  # Dotenv para variables de entorno (API keys, endpoints, etc.)
+  # Dotenv for environment variables (API keys, endpoints, etc.)
   flutter_dotenv: ^5.1.0
 
 dev_dependencies:
@@ -83,7 +83,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    # Archivos de variables de entorno
+  # Environment variable files
     - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see

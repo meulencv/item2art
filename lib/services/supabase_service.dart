@@ -56,7 +56,12 @@ class SupabaseService {
       return false;
     }
     try {
-      final data = {'nfc_uuid': nfcUuid, 'tipo': tipo, 'contenido': contenido};
+      final normalizedTipo = _normalizeTipo(tipo);
+      final data = {
+        'nfc_uuid': nfcUuid,
+        'tipo': normalizedTipo,
+        'contenido': contenido,
+      };
 
       final response = await client
           .from('memories')
@@ -70,7 +75,8 @@ class SupabaseService {
             : '✅ Memory saved in Supabase',
       );
       print('   UUID: $nfcUuid');
-      print('   Type: $tipo');
+      print('   Type (raw): $tipo');
+      print('   Type (normalized): $normalizedTipo');
       print(
         '   Content: ${contenido.substring(0, contenido.length > 50 ? 50 : contenido.length)}...',
       );
@@ -79,6 +85,24 @@ class SupabaseService {
     } catch (e) {
       print('❌ Error saving to Supabase: $e');
       return false;
+    }
+  }
+
+  static String _normalizeTipo(String tipo) {
+    final lower = tipo.toLowerCase();
+    switch (lower) {
+      case 'story':
+      case 'historia':
+        return 'historia';
+      case 'music':
+      case 'música':
+      case 'musica':
+        return 'musica';
+      case 'image':
+      case 'imagen':
+        return 'imagen';
+      default:
+        return lower;
     }
   }
 

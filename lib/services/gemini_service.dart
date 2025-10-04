@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'prompt_templates.dart';
+import 'kie_image_service.dart';
 
 class GeminiService {
   // Keys and endpoints loaded via dotenv
@@ -12,14 +13,7 @@ class GeminiService {
   static final String _imageModelUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/${dotenv.env['GEMINI_IMAGE_MODEL'] ?? 'gemini-2.5-flash-image'}:streamGenerateContent';
 
-  // OpenRouter API (Gemini 2.5 Image preview) for image generation when READING NFC
-  static final String _openRouterApiKey =
-      dotenv.env['OPENROUTER_API_KEY'] ?? '';
-  static final String _openRouterUrl =
-      dotenv.env['OPENROUTER_BASE_URL'] ?? 'https://openrouter.ai/api/v1';
-
   static bool get isGeminiConfigured => _apiKey.isNotEmpty;
-  static bool get isOpenRouterConfigured => _openRouterApiKey.isNotEmpty;
 
   /// Generates a conversational reply constrained to the provided context data.
   static Future<String> generateChatReply({
@@ -40,62 +34,24 @@ class GeminiService {
     );
   }
 
-  /// Generates an image using the OpenRouter API based on the memory content.
+  /// Generates an image using the KIE AI API based on the memory content.
   /// Used when reading an NFC tag of type image.
   static Future<String?> generateImageFromMemory(String memoryContent) async {
-    if (!isOpenRouterConfigured) {
-      print('⚠️ OpenRouter API key not configured');
+    if (!KieImageService.isConfigured) {
+      print('⚠️ KIE API key not configured');
       return null;
     }
     try {
-      print('🎨 Calling OpenRouter API to generate image...');
+      print('🎨 Calling KIE AI API to generate image...');
 
-      final requestBody = {
-        'model': 'google/gemini-2.5-flash-image-preview',
-        'messages': [
-          {
-            'role': 'user',
-            'content': PromptTemplates.imagePrompt(
-              contentSummary: memoryContent,
-            ),
-          },
-        ],
-        'modalities': ['image', 'text'],
-      };
+      final prompt = PromptTemplates.imagePrompt(contentSummary: memoryContent);
 
-      final response = await http.post(
-        Uri.parse('$_openRouterUrl/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_openRouterApiKey',
-        },
-        body: jsonEncode(requestBody),
-      );
+      final base64 = await KieImageService.generateImage(prompt: prompt);
 
-      print('📡 OpenRouter API response (status: ${response.statusCode})');
-      print('📄 Body completo: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        // Extract the image from the response (structure may vary).
-        final images = data['choices']?[0]?['message']?['images'];
-        if (images != null && images.isNotEmpty) {
-          final imageUrl = images[0]?['image_url']?['url'];
-          if (imageUrl != null && imageUrl.startsWith('data:image')) {
-            final base64Data = imageUrl.split(',').last;
-            print(
-              '✅ Image generated successfully (${base64Data.length} chars)',
-            );
-            return base64Data;
-          }
-        }
-      }
-
-      print('⚠️ Failed to generate image (status: ${response.statusCode})');
-      return null;
+      print('✅ Image generated successfully (${base64.length} chars)');
+      return base64;
     } catch (e) {
-      print('❌ OpenRouter API error: $e');
+      print('❌ KIE API error: $e');
       return null;
     }
   }

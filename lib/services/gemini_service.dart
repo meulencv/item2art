@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'prompt_templates.dart';
+
 class GeminiService {
   // Keys and endpoints loaded via dotenv
   static final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
@@ -19,6 +21,25 @@ class GeminiService {
   static bool get isGeminiConfigured => _apiKey.isNotEmpty;
   static bool get isOpenRouterConfigured => _openRouterApiKey.isNotEmpty;
 
+  /// Generates a conversational reply constrained to the provided context data.
+  static Future<String> generateChatReply({
+    required String userInput,
+    required String contextData,
+  }) async {
+    final prompt = PromptTemplates.chatPrompt(
+      userInput: userInput,
+      contextData: contextData.isNotEmpty ? contextData : 'No data provided.',
+    );
+
+    return _callTextModel(
+      prompt: prompt,
+      fallback:
+          'No pude obtener una respuesta en este momento, pero seguimos explorando tus recuerdos.',
+      maxOutputTokens: 250,
+      temperature: 0.6,
+    );
+  }
+
   /// Generates an image using the OpenRouter API based on the memory content.
   /// Used when reading an NFC tag of type image.
   static Future<String?> generateImageFromMemory(String memoryContent) async {
@@ -34,8 +55,9 @@ class GeminiService {
         'messages': [
           {
             'role': 'user',
-            'content':
-                'Create an artistic and emotional illustration inspired by this memory: $memoryContent',
+            'content': PromptTemplates.imagePrompt(
+              contentSummary: memoryContent,
+            ),
           },
         ],
         'modalities': ['image', 'text'],
@@ -89,10 +111,7 @@ class GeminiService {
     }
     try {
       final prompt =
-          '''Based on this description, generate an artistic and emotional image that captures the essence of the memory:
-
-"$originalText"
-
+          '''${PromptTemplates.imagePrompt(contentSummary: originalText)}
 Additionally, provide a brief English summary of the memory (maximum 100 words) that highlights emotional keywords.''';
 
       final requestBody = {
@@ -180,36 +199,12 @@ Additionally, provide a brief English summary of the memory (maximum 100 words) 
     try {
       final prompt = _buildPrompt(originalText, memoryType);
 
-      final response = await http.post(
-        Uri.parse('$_textModelUrl?key=$_apiKey'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'contents': [
-            {
-              'parts': [
-                {'text': prompt},
-              ],
-            },
-          ],
-          'generationConfig': {
-            'thinkingConfig': {'thinkingBudget': 0},
-            'maxOutputTokens': 200,
-            'temperature': 0.7,
-          },
-        }),
+      return _callTextModel(
+        prompt: prompt,
+        fallback: originalText,
+        maxOutputTokens: 200,
+        temperature: 0.7,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final generatedText =
-            data['candidates']?[0]?['content']?['parts']?[0]?['text'] ??
-            originalText;
-        return generatedText.trim();
-      } else {
-        print('Gemini API error: ${response.statusCode}');
-        print('Response: ${response.body}');
-        return originalText;
-      }
     } catch (e) {
       print('Error processing with Gemini: $e');
       return originalText;
@@ -253,5 +248,53 @@ Please create a summarized and improved version of this memory (maximum 150 word
 
 Respond ONLY with the improved text, without additional explanations.
 ''';
+  }
+
+  static Future<String> _callTextModel({
+    required String prompt,
+    required String fallback,
+    int maxOutputTokens = 200,
+    double temperature = 0.7,
+  }) async {
+    if (!isGeminiConfigured) {
+      print('⚠️ Gemini API key not configured');
+      return fallback;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_textModelUrl?key=$_apiKey'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contents': [
+            {
+              'parts': [
+                {'text': prompt},
+              ],
+            },
+          ],
+          'generationConfig': {
+            'thinkingConfig': {'thinkingBudget': 0},
+            'maxOutputTokens': maxOutputTokens,
+            'temperature': temperature,
+          },
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final generatedText =
+            data['candidates']?[0]?['content']?['parts']?[0]?['text'] ??
+            fallback;
+        return generatedText.trim();
+      } else {
+        print('Gemini API error: ${response.statusCode}');
+        print('Response: ${response.body}');
+        return fallback;
+      }
+    } catch (e) {
+      print('Error processing with Gemini: $e');
+      return fallback;
+    }
   }
 }

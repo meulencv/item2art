@@ -96,9 +96,10 @@ class VoiceChatProvider extends ChangeNotifier {
 
       // Fetch Gemini's reply using a trimmed conversation history.
       final contextText = _buildContext();
-      final prompt =
-          'Memory context:\n$contextText\n\nUser question: $userText\n\nReply briefly and empathetically.';
-      final aiResponse = await GeminiService.processMemoryText(prompt, 'story');
+      final aiResponse = await GeminiService.generateChatReply(
+        userInput: userText,
+        contextData: contextText,
+      );
       _messages.add(
         VoiceChatMessage(role: VoiceChatMessageRole.ai, text: aiResponse),
       );

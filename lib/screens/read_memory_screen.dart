@@ -10,6 +10,7 @@ import '../services/gemini_service.dart';
 import '../services/supabase_service.dart';
 import '../services/suno_music_service.dart';
 import '../services/nfc_foreground_service.dart';
+import '../services/prompt_templates.dart';
 import 'voice_chat_screen.dart';
 
 class ReadMemoryScreen extends StatefulWidget {
@@ -194,8 +195,11 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
         });
 
         try {
+          final musicPrompt = PromptTemplates.musicPrompt(
+            contentSummary: contenido,
+          );
           final sunoResult = await SunoMusicService.generateSongAndWait(
-            prompt: contenido,
+            prompt: musicPrompt,
             pollInterval: const Duration(seconds: 4),
             maxWait: const Duration(minutes: 3),
           );

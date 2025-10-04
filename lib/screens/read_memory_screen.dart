@@ -8,6 +8,7 @@ import 'package:nfc_manager/nfc_manager_ios.dart';
 import '../services/gemini_service.dart';
 import '../services/supabase_service.dart';
 import '../services/suno_music_service.dart';
+import '../services/nfc_foreground_service.dart';
 import 'voice_chat_screen.dart';
 
 class ReadMemoryScreen extends StatefulWidget {
@@ -64,11 +65,15 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       curve: Curves.elasticOut,
     );
 
+    // Activar modo exclusivo NFC (solo Android)
+    NfcForegroundService.enable();
     _startNFCSession();
   }
 
   @override
   void dispose() {
+    // Desactivar modo exclusivo al salir
+    NfcForegroundService.disable();
     NfcManager.instance.stopSession();
     _waveController.dispose();
     _pulseController.dispose();

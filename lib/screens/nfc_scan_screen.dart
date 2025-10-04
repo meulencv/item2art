@@ -9,6 +9,7 @@ import 'package:ndef_record/ndef_record.dart';
 import '../models/memory.dart';
 import '../services/memory_service.dart';
 import '../services/supabase_service.dart';
+import '../services/nfc_foreground_service.dart';
 
 class NFCScanScreen extends StatefulWidget {
   final String memoryStory;
@@ -73,8 +74,22 @@ class _NFCScanScreenState extends State<NFCScanScreen>
       curve: Curves.elasticOut,
     );
 
+    // Activar modo exclusivo NFC (Android)
+    NfcForegroundService.enable();
     // Iniciar sesión NFC real
     _startNFCSession();
+  }
+
+  @override
+  void dispose() {
+    // Detener la sesión NFC al salir de la pantalla
+    NfcManager.instance.stopSession();
+    // Desactivar modo exclusivo al salir
+    NfcForegroundService.disable();
+    _waveController.dispose();
+    _pulseController.dispose();
+    _successController.dispose();
+    super.dispose();
   }
 
   /// Inicia la sesión NFC para escuchar tags
@@ -418,17 +433,6 @@ class _NFCScanScreenState extends State<NFCScanScreen>
       // Si falló el guardado, detener sesión
       await NfcManager.instance.stopSession();
     }
-  }
-
-  @override
-  void dispose() {
-    // Detener la sesión NFC al salir de la pantalla
-    NfcManager.instance.stopSession();
-
-    _waveController.dispose();
-    _pulseController.dispose();
-    _successController.dispose();
-    super.dispose();
   }
 
   @override

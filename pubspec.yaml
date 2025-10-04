@@ -37,6 +37,10 @@ dependencies:
   
   # NFC Manager para lectura/escritura de tags NFC
   nfc_manager: ^4.0.2
+  
+  # NDEF Record para crear registros NFC
+  ndef_record: ^1.2.1
+  ndef: ^0.3.4
 
 dev_dependencies:
   flutter_test:

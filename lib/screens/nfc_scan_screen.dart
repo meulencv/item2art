@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 import 'package:nfc_manager/nfc_manager_ios.dart';
+import 'package:ndef/ndef.dart' as ndef;
+import 'package:ndef_record/ndef_record.dart';
 import '../models/memory.dart';
 import '../services/memory_service.dart';
 
@@ -95,46 +98,67 @@ class _NFCScanScreenState extends State<NFCScanScreen>
         // Obtener ID del tag
         final String nfcTagId = _extractTagId(tag);
 
-        // Procesar el tag detectado
+        // Intentar escribir en la tarjeta NFC
+        bool writeSuccess = await _writeToNFC(tag, widget.memoryStory);
+
+        if (!writeSuccess) {
+          // Si falla la escritura, informar al usuario
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'No se pudo escribir en la tarjeta NFC. Puede ser de solo lectura.',
+                ),
+                backgroundColor: Colors.orange.shade700,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+
+        // Procesar el tag detectado (guardar en la app)
         await _onNFCDetected(nfcTagId);
+
+        // Detener la sesión NFC después de procesar
+        await NfcManager.instance.stopSession();
       },
     );
   }
 
-  /// Extrae el ID único del tag NFC usando las clases de plataforma
+  /// Extrae el ID único del tag NFC
   String _extractTagId(NfcTag tag) {
     try {
-      // Android: Intentar obtener del tag genérico primero
-      final nfcTagAndroid = NfcTagAndroid.from(tag);
-      if (nfcTagAndroid != null && nfcTagAndroid.id.isNotEmpty) {
-        return nfcTagAndroid.id
+      // Android
+      final androidTag = NfcTagAndroid.from(tag);
+      if (androidTag != null && androidTag.id.isNotEmpty) {
+        return androidTag.id
             .map((e) => e.toRadixString(16).padLeft(2, '0'))
             .join(':')
             .toUpperCase();
       }
 
-      // iOS: Intentar obtener de MiFare
-      final mifare = MiFareIos.from(tag);
-      if (mifare != null && mifare.identifier.isNotEmpty) {
-        return mifare.identifier
+      // iOS - MiFare
+      final miFareTag = MiFareIos.from(tag);
+      if (miFareTag != null && miFareTag.identifier.isNotEmpty) {
+        return miFareTag.identifier
             .map((e) => e.toRadixString(16).padLeft(2, '0'))
             .join(':')
             .toUpperCase();
       }
 
-      // iOS: Intentar obtener de Iso15693
-      final iso15693 = Iso15693Ios.from(tag);
-      if (iso15693 != null && iso15693.identifier.isNotEmpty) {
-        return iso15693.identifier
+      // iOS - ISO15693
+      final iso15693Tag = Iso15693Ios.from(tag);
+      if (iso15693Tag != null && iso15693Tag.identifier.isNotEmpty) {
+        return iso15693Tag.identifier
             .map((e) => e.toRadixString(16).padLeft(2, '0'))
             .join(':')
             .toUpperCase();
       }
 
-      // iOS: Intentar obtener de FeliCa
-      final feliCa = FeliCaIos.from(tag);
-      if (feliCa != null && feliCa.currentIDm.isNotEmpty) {
-        return feliCa.currentIDm
+      // iOS - FeliCa
+      final feliCaTag = FeliCaIos.from(tag);
+      if (feliCaTag != null && feliCaTag.currentIDm.isNotEmpty) {
+        return feliCaTag.currentIDm
             .map((e) => e.toRadixString(16).padLeft(2, '0'))
             .join(':')
             .toUpperCase();
@@ -147,10 +171,139 @@ class _NFCScanScreenState extends State<NFCScanScreen>
     return 'NFC_${DateTime.now().millisecondsSinceEpoch}';
   }
 
+  /// Escribe datos NDEF en la tarjeta NFC física
+  /// Sobrescribe cualquier contenido previo con el texto de la historia
+  Future<bool> _writeToNFC(NfcTag tag, String textToWrite) async {
+    try {
+      // Intentar Android primero
+      final ndefAndroid = NdefAndroid.from(tag);
+      if (ndefAndroid != null) {
+        return await _writeToNFCAndroid(ndefAndroid, textToWrite);
+      }
+
+      // Intentar iOS
+      final ndefIos = NdefIos.from(tag);
+      if (ndefIos != null) {
+        return await _writeToNFCIos(ndefIos, textToWrite);
+      }
+
+      print('❌ Esta tarjeta NFC no soporta NDEF');
+      return false;
+    } catch (e) {
+      print('❌ Error al escribir en NFC: $e');
+      return false;
+    }
+  }
+
+  /// Escribe en una tarjeta NFC Android
+  Future<bool> _writeToNFCAndroid(
+    NdefAndroid ndefAndroid,
+    String textToWrite,
+  ) async {
+    try {
+      // Verificar si la tarjeta es escribible
+      if (!ndefAndroid.isWritable) {
+        print('❌ Esta tarjeta NFC es de solo lectura');
+        return false;
+      }
+
+      print('📊 Capacidad de la tarjeta: ${ndefAndroid.maxSize} bytes');
+
+      // Crear mensaje NDEF con registro de texto usando el paquete ndef
+      final textRecord = ndef.TextRecord(
+        encoding: ndef.TextEncoding.UTF8,
+        language: 'es',
+        text: textToWrite,
+      );
+
+      // Codificar el record a bytes
+      final payload = textRecord.payload;
+
+      // Crear NdefRecord usando ndef_record
+      final ndefRecord = NdefRecord(
+        typeNameFormat: TypeNameFormat.wellKnown,
+        type: textRecord.type!,
+        identifier: textRecord.id != null
+            ? Uint8List.fromList(textRecord.id!)
+            : Uint8List(0),
+        payload: payload,
+      );
+
+      // Crear mensaje NDEF
+      final ndefMessage = NdefMessage(records: [ndefRecord]);
+
+      // Escribir en la tarjeta NFC (SOBRESCRIBE contenido previo)
+      await ndefAndroid.writeNdefMessage(ndefMessage);
+
+      print('✅ Texto escrito exitosamente en la tarjeta NFC (Android)');
+      print(
+        '📄 Contenido: ${textToWrite.substring(0, textToWrite.length > 50 ? 50 : textToWrite.length)}...',
+      );
+
+      return true;
+    } catch (e) {
+      print('❌ Error al escribir en NFC Android: $e');
+      return false;
+    }
+  }
+
+  /// Escribe en una tarjeta NFC iOS
+  Future<bool> _writeToNFCIos(NdefIos ndefIos, String textToWrite) async {
+    try {
+      // Verificar estado
+      if (ndefIos.status == NdefStatusIos.notSupported) {
+        print('❌ Esta tarjeta NFC no soporta NDEF');
+        return false;
+      }
+
+      if (ndefIos.status == NdefStatusIos.readOnly) {
+        print('❌ Esta tarjeta NFC es de solo lectura');
+        return false;
+      }
+
+      print('📊 Capacidad de la tarjeta: ${ndefIos.capacity} bytes');
+
+      // Crear mensaje NDEF con registro de texto usando el paquete ndef
+      final textRecord = ndef.TextRecord(
+        encoding: ndef.TextEncoding.UTF8,
+        language: 'es',
+        text: textToWrite,
+      );
+
+      // Codificar el record a bytes
+      final payload = textRecord.payload;
+
+      // Crear NdefRecord usando ndef_record
+      final ndefRecord = NdefRecord(
+        typeNameFormat: TypeNameFormat.wellKnown,
+        type: textRecord.type!,
+        identifier: textRecord.id != null
+            ? Uint8List.fromList(textRecord.id!)
+            : Uint8List(0),
+        payload: payload,
+      );
+
+      // Crear mensaje NDEF
+      final ndefMessage = NdefMessage(records: [ndefRecord]);
+
+      // Escribir en la tarjeta NFC (SOBRESCRIBE contenido previo)
+      await ndefIos.writeNdef(ndefMessage);
+
+      print('✅ Texto escrito exitosamente en la tarjeta NFC (iOS)');
+      print(
+        '📄 Contenido: ${textToWrite.substring(0, textToWrite.length > 50 ? 50 : textToWrite.length)}...',
+      );
+
+      return true;
+    } catch (e) {
+      print('❌ Error al escribir en NFC iOS: $e');
+      return false;
+    }
+  }
+
   /// Procesa la detección de un tag NFC
   Future<void> _onNFCDetected(String nfcTagId) async {
-    // Detener la sesión NFC inmediatamente para evitar múltiples lecturas
-    await NfcManager.instance.stopSession();
+    // NO detener la sesión aún - necesitamos escribir en la tarjeta
 
     // Crear objeto Memory
     final memory = Memory(
@@ -179,6 +332,9 @@ class _NFCScanScreenState extends State<NFCScanScreen>
           Navigator.popUntil(context, (route) => route.isFirst);
         }
       });
+    } else {
+      // Si falló el guardado, detener sesión
+      await NfcManager.instance.stopSession();
     }
   }
 

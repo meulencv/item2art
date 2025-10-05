@@ -354,6 +354,27 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
     }
   }
 
+  /// Translates Spanish memory types to English for display
+  String _translateTypeToEnglish(String type) {
+    switch (type.toLowerCase()) {
+      case 'historia':
+        return 'STORY';
+      case 'musica':
+      case 'música':
+        return 'MUSIC';
+      case 'imagen':
+        return 'IMAGE';
+      case 'story':
+        return 'STORY';
+      case 'music':
+        return 'MUSIC';
+      case 'image':
+        return 'IMAGE';
+      default:
+        return type.toUpperCase();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -764,7 +785,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                   Icon(icon, size: 20, color: Colors.white),
                   const SizedBox(width: 8),
                   Text(
-                    _memoryType!.toUpperCase(),
+                    _translateTypeToEnglish(_memoryType!),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,

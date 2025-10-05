@@ -174,7 +174,14 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       await NfcManager.instance.stopSession();
 
       // If the type is image, generate artwork with Gemini (regenerated on demand)
-      if (tipo == 'image') {
+      if (tipo == 'image' || tipo == 'imagen') {
+        // ignore: avoid_print
+        print(
+          '\n🖼️ [READ_MEMORY] Tipo de memoria detectado: IMAGEN (tipo=$tipo)',
+        );
+        // ignore: avoid_print
+        print('   Iniciando generación de imagen...');
+
         setState(() {
           _isGeneratingImage = true;
         });
@@ -183,12 +190,24 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           contenido,
         );
 
+        // ignore: avoid_print
+        print('\n📊 [READ_MEMORY] Resultado de generación:');
+        // ignore: avoid_print
+        print('   ¿Imagen recibida?: ${generatedImage != null ? "SÍ" : "NO"}');
+        if (generatedImage != null) {
+          // ignore: avoid_print
+          print('   Tamaño: ${generatedImage.length} caracteres');
+        }
+
         setState(() {
           _isGeneratingImage = false;
           _generatedImageBase64 = generatedImage;
           _showContent = true;
         });
-      } else if (tipo == 'music') {
+
+        // ignore: avoid_print
+        print('   Estado UI actualizado - showContent: $_showContent\n');
+      } else if (tipo == 'music' || tipo == 'musica' || tipo == 'música') {
         // If the type is music, generate a song with Suno (regenerated on demand)
         setState(() {
           _isGeneratingMusic = true;

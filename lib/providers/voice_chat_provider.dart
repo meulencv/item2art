@@ -23,6 +23,10 @@ class VoiceChatProvider extends ChangeNotifier {
 
   final AudioPlayerService _audioService = AudioPlayerService();
   final AudioRecorder _recorder = AudioRecorder();
+  final String?
+  _memoryContext; // Contextual memory (e.g. NFC read) not shown as intro message
+
+  VoiceChatProvider({String? memoryContext}) : _memoryContext = memoryContext;
 
   List<VoiceChatMessage> get messages => List.unmodifiable(_messages);
   bool get isRecording => _isRecording;
@@ -31,23 +35,6 @@ class VoiceChatProvider extends ChangeNotifier {
 
   Future<void> disposePlayer() async {
     await _audioService.dispose();
-  }
-
-  void addSystemIntro(String introText) {
-    if (_messages.isEmpty) {
-      _messages.add(
-        VoiceChatMessage(role: VoiceChatMessageRole.ai, text: introText),
-      );
-      notifyListeners();
-      _autoplayLastAI();
-    }
-  }
-
-  Future<void> _autoplayLastAI() async {
-    final last = _messages.last;
-    if (last.role == VoiceChatMessageRole.ai) {
-      await _speak(last.text);
-    }
   }
 
   Future<void> startRecording() async {
@@ -113,6 +100,9 @@ class VoiceChatProvider extends ChangeNotifier {
 
   String _buildContext() {
     final buffer = StringBuffer();
+    if (_memoryContext != null && _memoryContext.isNotEmpty) {
+      buffer.writeln('Memory: ${_memoryContext}');
+    }
     for (final m
         in _messages
             .where(
@@ -134,9 +124,25 @@ class VoiceChatProvider extends ChangeNotifier {
     _isPlaying = true;
     notifyListeners();
     try {
-      final file = await ElevenLabsService.textToSpeech(text);
+      if (kDebugMode)
+        print(
+          '[VoiceChat] Requesting TTS for: ${text.substring(0, text.length > 80 ? 80 : text.length)}',
+        );
+      File? file = await ElevenLabsService.textToSpeech(text);
+      if (file == null) {
+        if (kDebugMode)
+          print(
+            '[VoiceChat] First TTS attempt returned null, retrying once...',
+          );
+        file = await ElevenLabsService.textToSpeech(text);
+      }
       if (file != null) {
+        if (kDebugMode)
+          print('[VoiceChat] Playing synthesized audio: ${file.path}');
         await _audioService.playFromFile(file);
+      } else {
+        if (kDebugMode)
+          print('[VoiceChat] TTS failed twice; skipping audio playback');
       }
     } catch (e) {
       if (kDebugMode) print('Audio playback error: $e');
@@ -144,5 +150,29 @@ class VoiceChatProvider extends ChangeNotifier {
       _isPlaying = false;
       notifyListeners();
     }
+  }
+
+  /// Stops any ongoing recording or playback without adding messages.
+  Future<void> stopAll() async {
+    if (_isRecording) {
+      try {
+        await _recorder.stop();
+      } catch (_) {}
+      _isRecording = false;
+    }
+    if (_isPlaying) {
+      try {
+        await _audioService.stop();
+      } catch (_) {}
+      _isPlaying = false;
+    }
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    // Ensure resources are freed
+    _audioService.dispose();
+    super.dispose();
   }
 }

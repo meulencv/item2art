@@ -1066,7 +1066,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                       context,
                       MaterialPageRoute(
                         builder: (context) =>
-                            VoiceChatScreen(initialMemoryText: content),
+                            VoiceChatScreen(memoryContext: content),
                       ),
                     );
                   },

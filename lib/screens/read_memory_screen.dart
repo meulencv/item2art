@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:nfc_manager/nfc_manager.dart';
@@ -41,6 +42,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   // Unified audio player
   AudioPlayerService? _audioService;
   bool _isMusicPlaying = false;
+  StreamSubscription? _playerStateSubscription;
 
   @override
   void initState() {
@@ -76,9 +78,15 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
     _startNFCSession();
   }
 
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
+
   @override
   void dispose() {
     // Release the audio player
+    _playerStateSubscription?.cancel();
     _audioService?.dispose();
 
     // Disable exclusive mode when leaving
@@ -95,7 +103,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       bool isAvailable = await NfcManager.instance.isAvailable();
 
       if (!isAvailable) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage = 'NFC is not available on this device';
         });
         return;
@@ -109,7 +117,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       );
     } catch (e) {
       print('Error starting NFC session: $e');
-      setState(() {
+      _safeSetState(() {
         _errorMessage = 'Failed to start NFC: $e';
       });
     }
@@ -118,6 +126,15 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
   Future<void> _readFromNFC(NfcTag tag) async {
     try {
       print('📱 NFC tag detected');
+
+      _safeSetState(() {
+        _errorMessage = null;
+        _showContent = false;
+        _generatedImageBase64 = null;
+        _generatedSong = null;
+        _isGeneratingImage = false;
+        _isGeneratingMusic = false;
+      });
 
       String? uuid;
 
@@ -136,7 +153,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       }
 
       if (uuid == null) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage = 'This tag does not contain a valid UUID';
         });
         return;
@@ -148,7 +165,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       final memoryData = await SupabaseService.getMemoryByUuid(uuid);
 
       if (memoryData == null) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage =
               'No information was found for this UUID in the database';
         });
@@ -160,13 +177,13 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       final contenido = memoryData['contenido'] as String?;
 
       if (tipo == null || contenido == null) {
-        setState(() {
+        _safeSetState(() {
           _errorMessage = 'Incorrect data format in the database';
         });
         return;
       }
 
-      setState(() {
+      _safeSetState(() {
         _memoryType = tipo;
         _memoryContent = contenido;
       });
@@ -182,7 +199,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
         // ignore: avoid_print
         print('   Iniciando generación de imagen...');
 
-        setState(() {
+        _safeSetState(() {
           _isGeneratingImage = true;
         });
 
@@ -199,7 +216,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           print('   Tamaño: ${generatedImage.length} caracteres');
         }
 
-        setState(() {
+        _safeSetState(() {
           _isGeneratingImage = false;
           _generatedImageBase64 = generatedImage;
           _showContent = true;
@@ -207,9 +224,9 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
 
         // ignore: avoid_print
         print('   Estado UI actualizado - showContent: $_showContent\n');
-      } else if (tipo == 'music' || tipo == 'musica' || tipo == 'música') {
+      } else if (_isMusicType(tipo)) {
         // If the type is music, generate a song with Suno (regenerated on demand)
-        setState(() {
+        _safeSetState(() {
           _isGeneratingMusic = true;
         });
 
@@ -224,13 +241,25 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           );
 
           if (sunoResult.isComplete && sunoResult.songs.isNotEmpty) {
-            setState(() {
+            final song = sunoResult.songs.first;
+            print('🎵 [READ_MEMORY] Música generada exitosamente:');
+            print('   Título: ${song.title}');
+            print('   Stream URL: ${song.streamUrl}');
+            print('   Download URL: ${song.downloadUrl}');
+            print('   Estado final: ${sunoResult.status}');
+
+            _safeSetState(() {
               _isGeneratingMusic = false;
-              _generatedSong = sunoResult.songs.first;
+              _generatedSong = song;
               _showContent = true;
+              _errorMessage = null;
             });
           } else {
-            setState(() {
+            print('❌ [READ_MEMORY] Error: música no completada o vacía');
+            print('   Estado: ${sunoResult.status}');
+            print('   Canciones: ${sunoResult.songs.length}');
+
+            _safeSetState(() {
               _isGeneratingMusic = false;
               _errorMessage =
                   'Music generation failed (status: ${sunoResult.status})';
@@ -238,14 +267,14 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
           }
         } catch (e) {
           print('Error generating music: $e');
-          setState(() {
+          _safeSetState(() {
             _isGeneratingMusic = false;
             _errorMessage = 'Failed to generate music: $e';
           });
         }
       } else {
         // For story, simply show the content
-        setState(() {
+        _safeSetState(() {
           _showContent = true;
         });
       }
@@ -253,7 +282,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       _successController.forward();
     } catch (e) {
       print('Error reading NFC: $e');
-      setState(() {
+      _safeSetState(() {
         _errorMessage = 'Failed to read the tag: $e';
       });
     }
@@ -352,6 +381,14 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
       default:
         return const Color(0xFF764BA2);
     }
+  }
+
+  bool _isMusicType(String? type) {
+    if (type == null) return false;
+    final normalized = type.toLowerCase();
+    return normalized == 'music' ||
+        normalized == 'musica' ||
+        normalized == 'música';
   }
 
   /// Translates Spanish memory types to English for display
@@ -902,68 +939,11 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
                   ],
 
                   // If the memory type is music, show the Suno-generated song
-                  if (_memoryType == 'music' && _generatedSong != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFF667EEA).withOpacity(0.3),
-                            const Color(0xFFFEC163).withOpacity(0.2),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFFEC163).withOpacity(0.5),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.music_note,
-                                color: Color(0xFFFEC163),
-                                size: 28,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  _generatedSong!.title ?? 'Generated song',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          if (_generatedSong!.streamUrl != null &&
-                              _generatedSong!.streamUrl!.isNotEmpty) ...[
-                            _buildMusicLinkButton(
-                              'Play',
-                              _generatedSong!.streamUrl!,
-                              Icons.play_circle_filled,
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                          if (_generatedSong!.downloadUrl != null &&
-                              _generatedSong!.downloadUrl!.isNotEmpty)
-                            _buildMusicLinkButton(
-                              'Download',
-                              _generatedSong!.downloadUrl!,
-                              Icons.download,
-                            ),
-                        ],
-                      ),
-                    ),
+                  if (_isMusicType(_memoryType) &&
+                      _generatedSong?.streamUrl?.isNotEmpty == true) ...[
+                    _buildMusicPlayerCard(),
                     const SizedBox(height: 20),
-                  ] else if (_memoryType == 'music' ||
-                      _memoryType == 'musica' ||
-                      _memoryType == 'música') ...[
+                  ] else if (_isMusicType(_memoryType)) ...[
                     // If the music could not be generated, show a message
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -1201,7 +1181,7 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                  setState(() {
+                  _safeSetState(() {
                     _showContent = false;
                     _errorMessage = null;
                     _memoryType = null;
@@ -1268,100 +1248,134 @@ class _ReadMemoryScreenState extends State<ReadMemoryScreen>
     );
   }
 
-  Widget _buildMusicLinkButton(String label, String url, IconData icon) {
-    final bool isPlayButton = icon == Icons.play_circle_filled;
+  Widget _buildMusicPlayerCard() {
+    final song = _generatedSong!;
+    final title = (song.title?.isNotEmpty ?? false)
+        ? song.title!
+        : 'Generated song';
+    final streamUrl = song.streamUrl!;
+    final isPlaying = _isMusicPlaying;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () async {
-          if (isPlayButton) {
-            // Play the track inside the app
-            await _playMusic(url);
-          } else {
-            // Copy the download URL to the clipboard
-            await Clipboard.setData(ClipboardData(text: url));
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('$label URL copied to clipboard'),
-                  backgroundColor: const Color(0xFFFEC163),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            }
-          }
-        },
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF667EEA).withOpacity(0.3),
+            const Color(0xFFFEC163).withOpacity(0.2),
+          ],
+        ),
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            color: isPlayButton && _isMusicPlaying
-                ? const Color(0xFFFEC163).withOpacity(0.3)
-                : Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isPlayButton && _isMusicPlaying
-                  ? const Color(0xFFFEC163)
-                  : Colors.white.withOpacity(0.3),
-            ),
-          ),
-          child: Row(
+        border: Border.all(color: const Color(0xFFFEC163).withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Icon(
-                _isMusicPlaying && isPlayButton
-                    ? Icons.pause_circle_filled
-                    : icon,
-                color: Colors.white,
-                size: 20,
-              ),
+              const Icon(Icons.music_note, color: Color(0xFFFEC163), size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  _isMusicPlaying && isPlayButton ? 'Pause' : label,
+                  title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (!isPlayButton)
-                Icon(
-                  Icons.copy,
-                  color: Colors.white.withOpacity(0.5),
-                  size: 16,
-                ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          Text(
+            'Tap play to listen to the track generated for this memory.',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.75),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _playMusic(streamUrl),
+              icon: Icon(
+                isPlaying
+                    ? Icons.pause_circle_filled
+                    : Icons.play_circle_filled,
+              ),
+              label: Text(isPlaying ? 'Pause song' : 'Play song'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.12),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Stream URL',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 12,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            streamUrl,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.65),
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Future<void> _playMusic(String url) async {
     try {
+      print('🎵 [PLAY_MUSIC] Intentando reproducir URL: $url');
+
       // Lazily initialize the service if needed
       _audioService ??= AudioPlayerService();
+      print('🎵 [PLAY_MUSIC] AudioPlayerService inicializado');
 
-      // Listen for state changes
-      _audioService!.playerStateStream.listen((state) {
-        if (mounted) {
-          setState(() {
-            _isMusicPlaying = state.playing;
-          });
-        }
+      // Listen for state changes (only once)
+      _playerStateSubscription ??= _audioService!.playerStateStream.listen((
+        state,
+      ) {
+        print(
+          '🎵 [PLAY_MUSIC] Estado del reproductor: playing=${state.playing}',
+        );
+        _safeSetState(() {
+          _isMusicPlaying = state.playing;
+        });
       });
 
       if (_isMusicPlaying) {
         // Pause if it's already playing
+        print('🎵 [PLAY_MUSIC] Pausando reproducción...');
         await _audioService!.pause();
       } else {
         // Start playback
+        print('🎵 [PLAY_MUSIC] Iniciando reproducción desde URL...');
         await _audioService!.playFromUrl(url);
+        print('🎵 [PLAY_MUSIC] ✅ Reproducción iniciada exitosamente');
       }
     } catch (e) {
-      print('❌ Error playing music: $e');
+      print('❌ [PLAY_MUSIC] Error playing music: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

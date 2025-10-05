@@ -308,8 +308,11 @@ class SunoTaskResult {
     required this.raw,
   });
 
-  // As per documentation: SUCCESS, FIRST_SUCCESS, PENDING, CREATE_TASK_FAILED, etc.
-  bool get isComplete => status.toUpperCase() == 'SUCCESS';
+  // As per documentation: SUCCESS, TEXT_SUCCESS, FIRST_SUCCESS, PENDING, CREATE_TASK_FAILED, etc.
+  // TEXT_SUCCESS means streamUrl is ready, SUCCESS means downloadUrl is also ready
+  bool get isComplete =>
+      status.toUpperCase() == 'SUCCESS' ||
+      status.toUpperCase() == 'TEXT_SUCCESS';
   bool get isFailed =>
       status.toUpperCase().contains('FAILED') ||
       status.toUpperCase().contains('ERROR');
